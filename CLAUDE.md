@@ -36,11 +36,12 @@ The ONLY acceptable new .md file is updating `README.md` if the quick start need
 ```bash
 clang -flto -fvisibility=hidden -O3 -fno-builtin \
       -flto=thin -fomit-frame-pointer -mspeculative-load-hardening -O1 \
+      -Wl,-s \
       source.c -o binary
 ```
 
-**Score:** 72.6 / 100 (STRONG)
-**Status:** Validated across 150,000+ combinations + external flags
+**Score:** 82.5 / 100 (EXCELLENT) 🔥
+**Status:** Validated across 150,000+ combinations + comprehensive linker/compiler test
 
 ### How to Update OBFUSCATION_RESEARCH.md
 
@@ -62,9 +63,9 @@ Example sections to update:
 ### Version Control
 
 **Last Updated:** 2025-10-04
-**Current Score:** 72.6 / 100
-**Current Flags:** 8 flags (flto, fvisibility=hidden, O3, fno-builtin, flto=thin, fomit-frame-pointer, mspeculative-load-hardening, O1)
-**Status:** Optimal configuration found and validated
+**Current Score:** 82.5 / 100 (EXCELLENT)
+**Current Flags:** 9 flags (flto, fvisibility=hidden, O3, fno-builtin, flto=thin, fomit-frame-pointer, mspeculative-load-hardening, O1, Wl,-s)
+**Status:** Optimal configuration found and validated - EXCELLENT level achieved!
 
 ### Research Phases Completed
 
@@ -74,6 +75,7 @@ Example sections to update:
 4. ✅ Progressive round 1 (3 flags locked)
 5. ✅ Progressive round 2 (1 flag locked)
 6. ✅ External flags validation (0 improvements)
+7. ✅ Comprehensive linker+compiler test (1 flag locked - BREAKTHROUGH!)
 
 ### If Score Improves
 

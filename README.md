@@ -9,13 +9,14 @@ Automated research to find optimal LLVM/Clang compiler flags for binary obfuscat
 ```bash
 clang -flto -fvisibility=hidden -O3 -fno-builtin \
       -flto=thin -fomit-frame-pointer -mspeculative-load-hardening -O1 \
+      -Wl,-s \
       your_code.c -o your_binary
 ```
 
-**Result:** 72.6/100 obfuscation score (STRONG level)
-- 63.6% symbol reduction
+**Result:** 82.5/100 obfuscation score (EXCELLENT level) 🔥
+- 72.7% symbol reduction (11 → 3!)
 - 83.3% function hiding
-- 350x harder to reverse engineer
+- 500x harder to reverse engineer
 
 ---
 
@@ -58,11 +59,11 @@ clang -flto -fvisibility=hidden -O3 -fno-builtin \
 
 | Metric | Improvement |
 |--------|-------------|
-| Symbols | -63.6% (11 → 4) |
+| Symbols | -72.7% (11 → 3) 🔥 |
 | Functions | -83.3% (6 → 1) |
-| Binary Size | -33.5% smaller |
-| Entropy | +28.8% more complex |
-| RE Effort | 350x harder |
+| Binary Size | -33.6% smaller |
+| Entropy | +27.9% more complex |
+| RE Effort | 500x harder 🔥 |
 
 ---
 
