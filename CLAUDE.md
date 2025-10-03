@@ -92,3 +92,53 @@ Update these sections in `OBFUSCATION_RESEARCH.md`:
 **One source of truth = OBFUSCATION_RESEARCH.md**
 
 No exceptions. No temporary docs. No quick summaries. Just update the master document.
+
+---
+
+## 🔧 RULE 2: SHELL SCRIPT POLICY
+
+**ALL .sh FILES MUST BE IN `sh/` DIRECTORY!**
+
+### Active Scripts
+
+- **`sh/measure_all_obfuscation_metrics.sh`** - Measure all 8 obfuscation metrics for baseline and obfuscated binaries
+- **`sh/test_comprehensive_flags.sh`** - Test additional comprehensive flag combinations across all .c files in the repo
+
+### Script Management Guidelines
+
+✅ **DO:**
+- Create all new .sh scripts in `sh/` directory
+- Update existing scripts instead of creating duplicates
+- Keep script names descriptive and clear
+- Test scripts before committing
+- Document what each script does
+
+❌ **DO NOT:**
+- Create .sh files in root directory
+- Create multiple similar scripts with different names
+- Keep old/unused scripts around
+- Duplicate functionality across scripts
+
+### When to Update vs Create
+
+**UPDATE existing script if:**
+- Adding new flag to test
+- Improving measurement logic
+- Fixing bugs in existing script
+- Adding new metric to existing measurement
+
+**CREATE new script if:**
+- Completely different purpose (e.g., new optimization approach)
+- Different workflow (e.g., batch testing vs single test)
+
+### Script Organization
+
+```
+llvm/
+├── sh/                                      # All shell scripts here
+│   ├── measure_all_obfuscation_metrics.sh  # Metrics measurement
+│   └── test_comprehensive_flags.sh         # Flag testing
+├── scripts/                                 # Python tools
+├── src/                                     # Source files
+└── bin/                                     # Compiled binaries
+```
