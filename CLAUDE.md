@@ -2,34 +2,37 @@
 
 ## 📋 CRITICAL RULE: DOCUMENTATION POLICY
 
-**ONLY UPDATE `OBFUSCATION_RESEARCH.md` - DO NOT CREATE NEW DOCS!**
+**UPDATE DESIGNATED RESEARCH DOCS ONLY - DO NOT CREATE NEW DOCS!**
 
 ### Documentation Structure
 
-This project has **ONLY 2 markdown files:**
+This project has **3 markdown files:**
 
-1. **`README.md`** - Quick start guide (brief, points to main doc)
-2. **`OBFUSCATION_RESEARCH.md`** - **THE MASTER DOCUMENT** (comprehensive, always updated)
+1. **`README.md`** - Quick start guide (brief, points to main docs)
+2. **`OBFUSCATION_RESEARCH.md`** - Modern LLVM flags research (COMPLETE - 82.5 score)
+3. **`OLLVM_RESEARCH.md`** - OLLVM obfuscation passes research (**ACTIVE - UPDATE THIS**)
 
 ### When Making Changes
 
 ✅ **DO:**
-- Update `OBFUSCATION_RESEARCH.md` with new findings
-- Keep the document current with latest results
-- Add new sections to existing categories
-- Update metrics in place
-- Append to research journey section
+- Update `OLLVM_RESEARCH.md` with OLLVM findings (currently active)
+- Update `OBFUSCATION_RESEARCH.md` if modern LLVM flags change
+- Keep documents current with latest results
+- Update metrics and tables in place
+- Append to progress log sections
 
 ❌ **DO NOT:**
-- Create new .md files (BREAKTHROUGH_DISCOVERY.md, FINAL_SUMMARY.md, etc.)
+- Create new .md files (BREAKTHROUGH_DISCOVERY.md, FINAL_SUMMARY.md, OLLVM_FINAL.md, etc.)
 - Write separate analysis documents
 - Make quick reference cards
 - Create phase-specific reports
 - Generate comparison documents
 
-### Exception
+### Current Research Focus
 
-The ONLY acceptable new .md file is updating `README.md` if the quick start needs changes.
+**ACTIVE:** `OLLVM_RESEARCH.md` - Testing OLLVM obfuscation passes
+- Goal: Exceed 82.5 baseline score
+- Phases: Standalone → Combined → Extracted → Radare2 testing
 
 ### Current Optimal Configuration
 
@@ -43,22 +46,30 @@ clang -flto -fvisibility=hidden -O3 -fno-builtin \
 **Score:** 82.5 / 100 (EXCELLENT) 🔥
 **Status:** Validated across 150,000+ combinations + comprehensive linker/compiler test
 
-### How to Update OBFUSCATION_RESEARCH.md
+### How to Update OLLVM_RESEARCH.md (ACTIVE)
 
 When new findings emerge:
 
-1. **Read** the current `OBFUSCATION_RESEARCH.md`
-2. **Edit** the relevant section (don't append, update in place)
-3. **Update** the "Last Updated" date at top
-4. **Update** metrics if they changed
-5. **Add** to research journey if new phase completed
+1. **Read** the current `OLLVM_RESEARCH.md`
+2. **Check off** completed todos in Phase sections
+3. **Fill in** results tables with scores/metrics
+4. **Update** "Last Updated" date at top
+5. **Append** to "Progress Log" section
 
-Example sections to update:
+Key sections to update:
+- `## 📋 RESEARCH PLAN & TODOS` - Check off completed items
+- `## 📊 RESULTS TRACKING` - Fill in measurement tables
+- `## 🔧 BUILD STATUS` - Document build progress/issues
+- `## 📝 PROGRESS LOG` - Add dated entries for each session
+- `## 🎯 SUCCESS CRITERIA` - Track completion status
+
+### How to Update OBFUSCATION_RESEARCH.md (if needed)
+
+Only update if OLLVM research discovers better modern LLVM flags:
+
 - `## 🏆 OPTIMAL CONFIGURATION` - If flags change
 - `## 📊 RESULTS ACHIEVED` - If metrics improve
-- `## 🎯 FLAG BREAKDOWN` - If new flags added
-- `## 🚀 RESEARCH JOURNEY` - Add new phases
-- `## 📈 SCORE PROGRESSION` - Update timeline
+- `## 🚀 RESEARCH JOURNEY` - Add Phase 9: OLLVM Integration
 
 ### Version Control
 
