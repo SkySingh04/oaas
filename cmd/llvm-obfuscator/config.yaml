@@ -1,0 +1,28 @@
+obfuscation:
+  level: 4
+  platform: linux
+  compiler_flags:
+    - "-flto"
+    - "-fvisibility=hidden"
+    - "-O3"
+    - "-fno-builtin"
+    - "-flto=thin"
+    - "-fomit-frame-pointer"
+    - "-mspeculative-load-hardening"
+    - "-O1"
+    - "-Wl,-s"
+  passes:
+    flattening: true
+    substitution: true
+    bogus_control_flow: true
+    split: true
+  advanced:
+    cycles: 2
+    string_encryption: true
+    fake_loops: 10
+  output:
+    directory: "./obfuscated"
+    report_format:
+      - json
+      - html
+      - pdf
