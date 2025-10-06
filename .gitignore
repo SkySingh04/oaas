@@ -11,7 +11,10 @@ __pycache__/
 
 # Build artifacts
 bin/
+dist/
 
 # Editor settings
 .vscode/
 .idea/
+
+node_modules/
