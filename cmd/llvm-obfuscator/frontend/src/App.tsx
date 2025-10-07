@@ -1,12 +1,32 @@
-import { CssBaseline, Box, Button, Typography, Stack, Divider, TextField, LinearProgress, Snackbar, Grid, Paper, List, ListItemButton, ListItemText } from '@mui/material';
+import { 
+  CssBaseline, 
+  Box, 
+  Button, 
+  Typography, 
+  Stack, 
+  Divider, 
+  TextField, 
+  LinearProgress, 
+  Snackbar, 
+  Grid, 
+  Paper, 
+  List, 
+  ListItemButton, 
+  ListItemText,
+  Alert
+} from '@mui/material';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 function App() {
+  const [serverStatus, setServerStatus] = useState<'checking' | 'online' | 'offline'>('checking');
   const [file, setFile] = useState<File | null>(null);
   const [jobId, setJobId] = useState<string | null>(null);
+  const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
+  const [binaryName, setBinaryName] = useState<string | null>(null);
   const [report, setReport] = useState<unknown | null>(null);
   const [loading, setLoading] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+  const [processingStatus, setProcessingStatus] = useState<string>('');
   const [availableFlags, setAvailableFlags] = useState<Array<{ flag: string; category: string; description?: string }>>([
     { flag: '-O1', category: 'optimization_level', description: 'Basic optimization' },
     { flag: '-O2', category: 'optimization_level', description: 'Standard optimization' },
@@ -54,6 +74,10 @@ function App() {
     }
     setLoading(true);
     setReport(null);
+    setDownloadUrl(null);
+    setBinaryName(null);
+    setProcessingStatus('Uploading file...');
+    
     try {
       const source_b64 = await fileToBase64(file);
       const tokens = Array.from(
@@ -77,27 +101,49 @@ function App() {
         report_formats: ['json'],
         custom_flags: tokens
       };
-      const res = await fetch('/api/obfuscate', {
+      
+      setProcessingStatus('Processing obfuscation...');
+      
+      // Use synchronous endpoint
+      const res = await fetch('/api/obfuscate/sync', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       });
-      if (!res.ok) throw new Error(await res.text());
+      
+      if (!res.ok) {
+        const errorText = await res.text();
+        throw new Error(errorText);
+      }
+      
       const data = await res.json();
       setJobId(data.job_id);
-      setToast(`Queued job ${data.job_id}`);
+      setDownloadUrl(data.download_url);
+      setBinaryName(data.binary_name);
+      setProcessingStatus('');
+      setToast(`Obfuscation completed! Binary ready for download.`);
+      
+      // Auto-fetch report
+      if (data.report_url) {
+        const reportRes = await fetch(data.report_url);
+        if (reportRes.ok) {
+          const reportData = await reportRes.json();
+          setReport(reportData);
+        }
+      }
     } catch (err) {
-      setToast(String(err));
+      setProcessingStatus('');
+      setToast(`Error: ${String(err)}`);
     } finally {
       setLoading(false);
     }
-  }, [file]);
+  }, [file, selectedFlags]);
 
   const onFetchReport = useCallback(async () => {
     if (!jobId) return;
     setLoading(true);
     try {
-      const res = await fetch(`/api/analyze/${jobId}`);
+      const res = await fetch(`/api/report/${jobId}`);
       if (!res.ok) throw new Error(await res.text());
       const data = await res.json();
       setReport(data);
@@ -108,9 +154,30 @@ function App() {
     }
   }, [jobId]);
 
+  const onDownloadBinary = useCallback(() => {
+    if (!downloadUrl) return;
+    const link = document.createElement('a');
+    link.href = downloadUrl;
+    link.download = binaryName || 'obfuscated_binary';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  }, [downloadUrl, binaryName]);
+
   const reportJson = useMemo(() => (report ? JSON.stringify(report, null, 2) : ''), [report]);
 
-  useEffect(() => {}, []);
+  useEffect(() => {
+    // Check if backend is available
+    fetch('/api/health')
+      .then(res => {
+        if (res.ok) {
+          setServerStatus('online');
+        } else {
+          setServerStatus('offline');
+        }
+      })
+      .catch(() => setServerStatus('offline'));
+  }, []);
 
   const addFlag = (flag: string) => {
     setSelectedFlags((cur) => (cur.includes(flag) ? cur : [...cur, flag]));
@@ -126,6 +193,17 @@ function App() {
         <Typography variant="h4" gutterBottom>
           LLVM Obfuscator
         </Typography>
+        {serverStatus === 'checking' && (
+          <Alert severity="info" sx={{ mb: 2 }}>Checking backend connection...</Alert>
+        )}
+        {serverStatus === 'offline' && (
+          <Alert severity="error" sx={{ mb: 2 }}>
+            Backend server is offline. Please start the API server: <code>python -m uvicorn api.server:app --reload</code>
+          </Alert>
+        )}
+        {serverStatus === 'online' && (
+          <Alert severity="success" sx={{ mb: 2 }}>Connected to backend server</Alert>
+        )}
         <Stack spacing={2}>
           <Box>
             <Typography variant="subtitle1" gutterBottom>
@@ -179,22 +257,36 @@ function App() {
 
           <Box>
             <Typography variant="subtitle1" gutterBottom>
-              3) Submit job
+              3) Submit and process
             </Typography>
             <Stack direction="row" spacing={2} alignItems="center">
               <Button variant="contained" onClick={onSubmit} disabled={!file || loading}>
-                Submit
+                {loading ? 'Processing...' : 'Submit & Obfuscate'}
               </Button>
               {loading && <LinearProgress sx={{ width: 200 }} />}
-              <Typography variant="body2">{jobId ? `Job: ${jobId}` : ''}</Typography>
             </Stack>
+            {processingStatus && (
+              <Typography variant="body2" color="primary" sx={{ mt: 1 }}>
+                {processingStatus}
+              </Typography>
+            )}
+            {downloadUrl && (
+              <Stack direction="row" spacing={2} sx={{ mt: 2 }}>
+                <Button variant="contained" color="success" onClick={onDownloadBinary}>
+                  Download Obfuscated Binary
+                </Button>
+                <Typography variant="body2" sx={{ display: 'flex', alignItems: 'center' }}>
+                  {binaryName}
+                </Typography>
+              </Stack>
+            )}
           </Box>
 
           <Divider />
 
           <Box>
             <Typography variant="subtitle1" gutterBottom>
-              4) Fetch report
+              4) View report (optional)
             </Typography>
             <Stack direction="row" spacing={2} alignItems="center" sx={{ mb: 1 }}>
               <Button variant="outlined" onClick={onFetchReport} disabled={!jobId || loading}>
