@@ -4,7 +4,7 @@ import base64
 import logging
 import os
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Dict, Optional, Tuple
 
 from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse, JSONResponse
@@ -23,7 +23,7 @@ from core.config import AdvancedConfiguration, PassConfiguration, SymbolObfuscat
 from core.exceptions import JobNotFoundError, ValidationError
 from core.job_manager import JobManager
 from core.progress import ProgressEvent, ProgressTracker
-from core.utils import create_logger, ensure_directory
+from core.utils import create_logger, ensure_directory, normalize_flags_and_passes
 
 # Load flags database for the /api/flags endpoint. Prefer importing from the
 # repo's scripts module; fall back to loading the file directly, and finally to
@@ -53,6 +53,36 @@ report_base = Path("reports").resolve()
 ensure_directory(report_base)
 reporter = ObfuscationReport(report_base)
 obfuscator = LLVMObfuscator(reporter=reporter)
+
+
+def _find_default_plugin() -> Tuple[Optional[str], bool]:
+    """Best-effort discovery of the obfuscation pass plugin.
+
+    Order of precedence:
+      1) OBFUSCATION_PLUGIN_PATH environment variable
+      2) Well-known relative paths near repo root (Linux/macOS/Windows variants)
+    Returns (path, exists_flag).
+    """
+    # 1) Environment variable override
+    env_path = os.environ.get("OBFUSCATION_PLUGIN_PATH")
+    if env_path:
+        candidate = Path(env_path)
+        return (str(candidate), candidate.exists())
+
+    # 2) Common build locations relative to this file
+    repo_root = Path(__file__).resolve().parents[4]
+    candidates = [
+        repo_root / "llvm-project" / "build" / "lib" / "LLVMObfuscationPlugin.dylib",  # macOS
+        repo_root / "llvm-project" / "build" / "lib" / "LLVMObfuscationPlugin.so",     # Linux
+        repo_root / "llvm-project" / "build" / "bin" / "LLVMObfuscationPlugin.dll",    # Windows
+    ]
+    for c in candidates:
+        if c.exists():
+            return (str(c), True)
+    return (None, False)
+
+
+DEFAULT_PASS_PLUGIN_PATH, DEFAULT_PASS_PLUGIN_EXISTS = _find_default_plugin()
 
 
 class PassesModel(BaseModel):
@@ -142,11 +172,13 @@ def _decode_source(source_b64: str, destination: Path) -> None:
 
 
 def _build_config_from_request(payload: ObfuscateRequest, destination_dir: Path) -> ObfuscationConfig:
+    detected_flags: list[str] = payload.custom_flags or []
+    sanitized_flags, detected_passes = normalize_flags_and_passes(detected_flags)
     passes = PassConfiguration(
-        flattening=payload.config.passes.flattening,
-        substitution=payload.config.passes.substitution,
-        bogus_control_flow=payload.config.passes.bogus_control_flow,
-        split=payload.config.passes.split,
+        flattening=payload.config.passes.flattening or detected_passes.get("flattening", False),
+        substitution=payload.config.passes.substitution or detected_passes.get("substitution", False),
+        bogus_control_flow=payload.config.passes.bogus_control_flow or detected_passes.get("boguscf", False),
+        split=payload.config.passes.split or detected_passes.get("split", False),
     )
     symbol_obf = SymbolObfuscationConfiguration(
         enabled=payload.config.symbol_obfuscation.enabled,
@@ -161,6 +193,14 @@ def _build_config_from_request(payload: ObfuscateRequest, destination_dir: Path)
         fake_loops=payload.config.fake_loops,
         symbol_obfuscation=symbol_obf,
     )
+    # Auto-load plugin if passes are requested and no explicit plugin provided
+    any_pass_requested = (
+        passes.flattening or passes.substitution or passes.bogus_control_flow or passes.split
+    )
+    chosen_plugin = payload.custom_pass_plugin
+    if any_pass_requested and not chosen_plugin and DEFAULT_PASS_PLUGIN_EXISTS:
+        chosen_plugin = DEFAULT_PASS_PLUGIN_PATH
+
     output_config = ObfuscationConfig.from_dict(
         {
             "level": payload.config.level,
@@ -187,8 +227,8 @@ def _build_config_from_request(payload: ObfuscateRequest, destination_dir: Path)
                 "directory": str(destination_dir),
                 "report_format": payload.report_formats,
             },
-            "compiler_flags": payload.custom_flags or [],
-            "custom_pass_plugin": payload.custom_pass_plugin,
+            "compiler_flags": sanitized_flags,
+            "custom_pass_plugin": chosen_plugin,
         }
     )
     return output_config
@@ -373,3 +413,20 @@ async def api_health():
 async def api_flags():
     # Expose the comprehensive flag list for UI selection
     return JSONResponse(comprehensive_flags)
+
+
+@app.get("/api/capabilities")
+async def api_capabilities():
+    """Expose backend capabilities so UI can adapt.
+
+    - pass_plugin.available: whether the obfuscation pass plugin was found
+    - pass_plugin.path: the discovered path if available
+    """
+    return JSONResponse(
+        {
+            "pass_plugin": {
+                "available": DEFAULT_PASS_PLUGIN_EXISTS,
+                "path": DEFAULT_PASS_PLUGIN_PATH,
+            }
+        }
+    )
