@@ -22,7 +22,7 @@ from core import (
 from core.batch import load_batch_config
 from core.config import AdvancedConfiguration, OutputConfiguration, SymbolObfuscationConfiguration
 from core.exceptions import ObfuscationError
-from core.utils import create_logger, load_yaml
+from core.utils import create_logger, load_yaml, normalize_flags_and_passes
 
 app = typer.Typer(add_completion=False, help="LLVM-based binary obfuscation toolkit")
 logger = create_logger("cli", logging.INFO)
@@ -55,14 +55,16 @@ def _build_config(
         return ObfuscationConfig.from_dict(data.get("obfuscation", data))
 
     flags = []
+    detected_passes = {"flattening": False, "substitution": False, "boguscf": False, "split": False}
     if custom_flags:
-        flags = [flag.strip() for flag in custom_flags.split(" ") if flag.strip()]
+        raw_flags = [flag.strip() for flag in custom_flags.split(" ") if flag.strip()]
+        flags, detected_passes = normalize_flags_and_passes(raw_flags)
 
     passes = PassConfiguration(
-        flattening=enable_flattening,
-        substitution=enable_substitution,
-        bogus_control_flow=enable_bogus_cf,
-        split=enable_split,
+        flattening=enable_flattening or detected_passes.get("flattening", False),
+        substitution=enable_substitution or detected_passes.get("substitution", False),
+        bogus_control_flow=enable_bogus_cf or detected_passes.get("boguscf", False),
+        split=enable_split or detected_passes.get("split", False),
     )
     symbol_obf_config = SymbolObfuscationConfiguration(
         enabled=enable_symbol_obfuscation,

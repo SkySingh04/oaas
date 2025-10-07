@@ -131,6 +131,72 @@ def merge_flags(base: Iterable[str], extra: Optional[Iterable[str]] = None) -> L
     return merged
 
 
+def normalize_flags_and_passes(flags: Iterable[str]) -> Tuple[List[str], Dict[str, bool]]:
+    """Split pass-like flags out of compiler flags.
+
+    Recognizes common obfuscation pass indicators (flattening, substitution,
+    boguscf, split) in various forms and returns a tuple of:
+      - sanitized compiler flags (with pass flags removed)
+      - a mapping of pass name -> enabled bool
+
+    Examples of recognized inputs (case-sensitive as used typically):
+      - "-fla", "-flattening", "flattening"
+      - "-sub", "-substitution", "substitution"
+      - "-bcf", "-boguscf", "boguscf"
+      - "-split", "split"
+      - sequences like "-mllvm", "-fla" (will be stripped and converted)
+    """
+    known_aliases = {
+        "flattening": {"-fla", "-flattening", "flattening"},
+        "substitution": {"-sub", "-substitution", "substitution"},
+        "boguscf": {"-bcf", "-boguscf", "boguscf"},
+        "split": {"-split", "split"},
+    }
+
+    pass_enabled: Dict[str, bool] = {k: False for k in known_aliases.keys()}
+    cleaned: List[str] = []
+
+    flags_list = list(flags)
+    i = 0
+    while i < len(flags_list):
+        token = flags_list[i]
+        # Handle "-mllvm <pass-flag>" pattern by consuming the next token
+        if token == "-mllvm" and i + 1 < len(flags_list):
+            next_tok = flags_list[i + 1]
+            matched = False
+            for pname, aliases in known_aliases.items():
+                if next_tok in aliases:
+                    pass_enabled[pname] = True
+                    matched = True
+                    break
+            # Skip both tokens if matched; else keep both
+            if matched:
+                i += 2
+                continue
+            cleaned.append(token)
+            # keep the next token as well since it's not a known alias
+            cleaned.append(next_tok)
+            i += 2
+            continue
+
+        # Standalone alias tokens
+        matched = False
+        for pname, aliases in known_aliases.items():
+            if token in aliases:
+                pass_enabled[pname] = True
+                matched = True
+                break
+        if matched:
+            i += 1
+            continue
+
+        # Everything else is a normal compiler/linker flag
+        cleaned.append(token)
+        i += 1
+
+    return cleaned, pass_enabled
+
+
 def summarize_symbols(binary_path: Path) -> Tuple[int, int]:
     if not binary_path.exists():
         return 0, 0
