@@ -184,11 +184,50 @@ def _run_obfuscation(job_id: str, source_path: Path, config: ObfuscationConfig) 
         progress_tracker.publish_sync(ProgressEvent(job_id=job_id, stage="failed", progress=1.0, message=str(exc)))
 
 
+@app.post("/api/obfuscate/sync")
+async def api_obfuscate_sync(
+    payload: ObfuscateRequest,
+):
+    """Synchronous obfuscation - process immediately and return binary."""
+    _validate_source_size(payload.source_code)
+    job = job_manager.create_job({"filename": payload.filename, "platform": payload.platform.value})
+    working_dir = report_base / job.job_id
+    ensure_directory(working_dir)
+    source_filename = _sanitize_filename(payload.filename)
+    source_path = (working_dir / source_filename).resolve()
+    _decode_source(payload.source_code, source_path)
+    config = _build_config_from_request(payload, working_dir)
+    
+    try:
+        job_manager.update_job(job.job_id, status="running")
+        result = obfuscator.obfuscate(source_path, config, job_id=job.job_id)
+        job_manager.update_job(job.job_id, status="completed", result=result)
+        job_manager.attach_reports(job.job_id, result.get("report_paths", {}))
+        
+        # Return job info with binary download link
+        binary_path = Path(result.get("output_file", ""))
+        if not binary_path.exists():
+            raise HTTPException(status_code=500, detail="Binary generation failed")
+        
+        return {
+            "job_id": job.job_id,
+            "status": "completed",
+            "download_url": f"/api/download/{job.job_id}",
+            "binary_name": binary_path.name,
+            "report_url": f"/api/report/{job.job_id}",
+        }
+    except Exception as exc:
+        logger.exception("Job %s failed", job.job_id)
+        job_manager.update_job(job.job_id, status="failed", error=str(exc))
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
 @app.post("/api/obfuscate")
 async def api_obfuscate(
     payload: ObfuscateRequest,
     background: BackgroundTasks,
 ):
+    """Async obfuscation - queue job and process in background."""
     _validate_source_size(payload.source_code)
     job = job_manager.create_job({"filename": payload.filename, "platform": payload.platform.value})
     await progress_tracker.publish(ProgressEvent(job.job_id, "queued", 0.0, "Job queued"))
@@ -276,6 +315,29 @@ async def websocket_progress(websocket: WebSocket, job_id: str):
             )
     except WebSocketDisconnect:
         logger.info("WebSocket disconnected for job %s", job_id)
+
+
+@app.get("/api/download/{job_id}")
+async def api_download_binary(job_id: str):
+    """Download the obfuscated binary."""
+    try:
+        job = job_manager.get_job(job_id)
+    except JobNotFoundError:
+        raise HTTPException(status_code=404, detail="Job not found")
+    
+    result = job.metadata.get("result")
+    if not result:
+        raise HTTPException(status_code=400, detail="Job not completed")
+    
+    binary_path = Path(result.get("output_file", ""))
+    if not binary_path.exists():
+        raise HTTPException(status_code=404, detail="Obfuscated binary not found")
+    
+    return FileResponse(
+        binary_path,
+        media_type="application/octet-stream",
+        filename=binary_path.name
+    )
 
 
 @app.get("/api/health")
