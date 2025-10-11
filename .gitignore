@@ -26,3 +26,8 @@ cmd/llvm-obfuscator/plugins/*/clang
 cmd/llvm-obfuscator/plugins/*/*.so
 cmd/llvm-obfuscator/plugins/*/*.dylib
 cmd/llvm-obfuscator/plugins/*/*.dll
+
+# Test binaries
+cmd/llvm-obfuscator/test_*/simple_auth
+cmd/llvm-obfuscator/test_*/*_test
+cmd/llvm-obfuscator/obfuscated/
