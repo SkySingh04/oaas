@@ -94,9 +94,18 @@ class LLVMObfuscator:
             except Exception as e:
                 self.logger.warning(f"Symbol obfuscation failed, continuing without it: {e}")
 
+        # String encryption (if enabled) - applied to source content
         string_result: Optional[StringEncryptionResult] = None
         if config.advanced.string_encryption:
-            string_result = self.encryptor.encrypt_strings(source_content)
+            # Get the symbol-obfuscated source if available, otherwise use original
+            current_source_content = working_source.read_text(encoding="utf-8", errors="ignore")
+            string_result = self.encryptor.encrypt_strings(current_source_content)
+
+            # Write the transformed source to a new file
+            string_encrypted_file = output_directory / f"{source_file.stem}_string_encrypted{source_file.suffix}"
+            string_encrypted_file.write_text(string_result.transformed_source, encoding="utf-8")
+            working_source = string_encrypted_file
+            self.logger.info(f"String encryption complete: {string_result.encrypted_strings}/{string_result.total_strings} strings encrypted")
 
         fake_loops = []
         if config.advanced.fake_loops:
