@@ -1844,8 +1844,192 @@ We've developed and proven **three complementary obfuscation layers** totaling *
 
 ---
 
-**Last Updated:** 2025-10-07
+**Last Updated:** 2025-10-11
 **Author:** Claude Code
 **Project:** LLVM Binary Obfuscation Research
 **Location:** `/Users/akashsingh/Desktop/llvm/`
 **Master Document:** `OBFUSCATION_COMPLETE.md`
+
+---
+
+## 🎯 Active TODO List (2025-10-11)
+
+### Priority 1: Red Team Validation
+- [ ] **Red Team Attack:** Use radare2 to aggressively deobfuscate ALL binaries in `/bin` directory
+  - [ ] Test against `bin/layer_test/` binaries (config1-4)
+  - [ ] Test against `bin/ultimate/*_ultimate` binaries
+  - [ ] Attempt to crack each binary and extract secrets
+  - [ ] Document ALL successful attack vectors found
+  - [ ] Identify weaknesses and propose fixes
+  - [ ] Goal: Find improvements through adversarial testing
+
+### Priority 2: CLI Usage Documentation
+- [ ] **Create CLAUDE.md:** Strict instructions for using the CLI wrapper
+  - [ ] Document CLI as the primary interface (not manual compilation)
+  - [ ] Provide standard workflow examples
+  - [ ] Add preset configuration commands
+  - [ ] Include troubleshooting guide
+  - [ ] Add best practices section
+
+### Priority 3: Deliverables Validation
+- [ ] **Report Generation Verification:**
+  - [ ] Verify CLI generates complete reports with all required fields:
+    - [ ] Input parameters logged (source file, platform, level, passes, flags)
+    - [ ] Output attributes logged (file size, obfuscation methods, format)
+    - [ ] Bogus code metrics (dead blocks, opaque predicates, junk instructions)
+    - [ ] Cycles completed (per-cycle metrics, duration)
+    - [ ] String obfuscation details (total, encrypted, method, percentage)
+    - [ ] Fake loops inserted (count, types, locations)
+  - [ ] Verify API generates same reports
+  - [ ] Verify Frontend can fetch and display reports
+
+- [ ] **Output File Verification:**
+  - [ ] Verify obfuscated binary is generated
+  - [ ] Verify binary is functional (runs correctly)
+  - [ ] Verify binary has proper permissions
+  - [ ] Verify binary download works (Frontend + API)
+
+### Status Tracking
+- **Red Team Attack:** 🔴 NOT STARTED
+- **CLAUDE.md:** 🔴 NOT STARTED
+- **Report Validation:** 🔴 NOT STARTED
+- **Output Validation:** 🔴 NOT STARTED
+
+---
+
+## Frontend & API Integration (NEW - Added 2025-10-11)
+
+### Complete Layer Integration Status
+
+✅ **CLI** - 100% Complete - All 4 layers fully exposed
+✅ **API** - 100% Complete - All 4 layers fully exposed
+✅ **Core** - 100% Complete - All 4 layers properly implemented
+✅ **Frontend** - 100% Complete (as of 2025-10-11) - All 4 layers now accessible
+
+### Frontend Layer Controls
+
+**Location:** `cmd/llvm-obfuscator/frontend/src/App.tsx`
+
+#### Section 3: Obfuscation Configuration
+- Obfuscation Level dropdown (1-5)
+- Cycles input (1-5)
+
+#### Section 4: Layer 2 - OLLVM Compiler Passes
+- ☑️ Control Flow Flattening
+- ☑️ Instruction Substitution
+- ☑️ Bogus Control Flow
+- ☑️ Basic Block Splitting
+
+#### Section 5: Layer 3 - Targeted Function Obfuscation
+- ☑️ String Encryption (XOR)
+- Number input for Fake Loops (0-50)
+
+#### Section 6: Layer 0 - Symbol Obfuscation
+- ☑️ Enable Cryptographic Symbol Renaming
+- Algorithm selection (SHA256, BLAKE2B, SipHash)
+- Prefix style (none, typed, underscore)
+- Hash length (8-32)
+- Custom salt (optional)
+
+#### Section 7: Quick Presets
+Five one-click configuration presets:
+
+**1. Standard Preset**
+- Level 3, String encryption ON, Symbol obf ON, Layer 1 optimal flags
+- ~10% overhead, 10x harder to RE
+
+**2. Maximum Preset**
+- Level 4, All OLLVM passes ON, String encryption ON, Symbol obf ON, Layer 1 flags
+- ~15-20% overhead, 15-20x harder to RE
+
+**3. Ultimate Preset**
+- Level 5, All layers ON, Cycles 2, Fake loops 10, Layer 1 flags
+- ~25-30% overhead, 50x+ harder to RE
+
+**4. Layer 1 Optimal Button**
+- Applies the 9 optimal compiler flags (82.5/100 score)
+- `-flto -fvisibility=hidden -O3 -fno-builtin -flto=thin -fomit-frame-pointer -mspeculative-load-hardening -O1`
+
+**5. Reset Button**
+- Clears all configuration back to defaults
+
+### API Endpoints
+
+**POST /api/obfuscate/sync** - Synchronous obfuscation
+**POST /api/obfuscate** - Async obfuscation
+**GET /api/analyze/{job_id}** - Binary analysis
+**POST /api/compare** - Binary comparison
+**GET /api/download/{job_id}** - Download obfuscated binary
+**GET /api/report/{job_id}** - Download report (JSON/HTML/Markdown)
+**GET /api/flags** - Get available compiler flags
+**WebSocket /ws/jobs/{job_id}** - Real-time progress updates
+
+### Usage Example (Frontend)
+
+```typescript
+// User clicks "Ultimate" preset button
+// Frontend auto-configures:
+{
+  level: 5,
+  passes: {
+    flattening: true,
+    substitution: true,
+    bogus_control_flow: true,
+    split: true
+  },
+  cycles: 2,
+  string_encryption: true,
+  fake_loops: 10,
+  symbol_obfuscation: {
+    enabled: true,
+    algorithm: "sha256",
+    hash_length: 12,
+    prefix_style: "typed"
+  },
+  custom_flags: [
+    "-flto", "-fvisibility=hidden", "-O3",
+    "-fno-builtin", "-flto=thin",
+    "-fomit-frame-pointer",
+    "-mspeculative-load-hardening", "-O1"
+  ]
+}
+```
+
+### CLI Usage Example
+
+```bash
+# Standard configuration
+python -m cli.obfuscate compile auth.c \
+  --level 3 \
+  --string-encryption \
+  --enable-symbol-obfuscation \
+  --custom-flags "-flto -fvisibility=hidden -O3"
+
+# Maximum configuration
+python -m cli.obfuscate compile auth.c \
+  --level 4 \
+  --enable-flattening \
+  --enable-substitution \
+  --enable-bogus-cf \
+  --enable-split \
+  --string-encryption \
+  --enable-symbol-obfuscation \
+  --custom-flags "-flto -fvisibility=hidden -O3 -fno-builtin"
+
+# Ultimate configuration
+python -m cli.obfuscate compile auth.c \
+  --level 5 \
+  --enable-flattening \
+  --enable-substitution \
+  --enable-bogus-cf \
+  --enable-split \
+  --cycles 2 \
+  --string-encryption \
+  --fake-loops 10 \
+  --enable-symbol-obfuscation \
+  --symbol-algorithm sha256 \
+  --symbol-hash-length 12 \
+  --custom-flags "-flto -fvisibility=hidden -O3 -fno-builtin -flto=thin -fomit-frame-pointer -mspeculative-load-hardening -O1"
+```
+
+---

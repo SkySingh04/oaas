@@ -54,12 +54,26 @@ function App() {
   ]);
   const [selectedFlags, setSelectedFlags] = useState<string[]>([]);
 
-  // Symbol obfuscation state
+  // Layer 0: Symbol obfuscation state
   const [enableSymbolObf, setEnableSymbolObf] = useState(false);
   const [symbolAlgorithm, setSymbolAlgorithm] = useState('sha256');
   const [symbolHashLength, setSymbolHashLength] = useState(12);
   const [symbolPrefix, setSymbolPrefix] = useState('typed');
   const [symbolSalt, setSymbolSalt] = useState('');
+
+  // Layer 2: OLLVM passes state
+  const [enableFlattening, setEnableFlattening] = useState(false);
+  const [enableSubstitution, setEnableSubstitution] = useState(false);
+  const [enableBogusCF, setEnableBogusCF] = useState(false);
+  const [enableSplit, setEnableSplit] = useState(false);
+
+  // Layer 3: Targeted obfuscation state
+  const [enableStringEncryption, setEnableStringEncryption] = useState(false);
+  const [fakeLoops, setFakeLoops] = useState(0);
+
+  // General settings
+  const [obfuscationLevel, setObfuscationLevel] = useState(3);
+  const [cycles, setCycles] = useState(1);
 
   const onPick = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     setFile(e.target.files?.[0] ?? null);
@@ -106,11 +120,16 @@ function App() {
         source_code: source_b64,
         filename: file.name,
         config: {
-          level: 3,
-          passes: { flattening: false, substitution: false, bogus_control_flow: false, split: false },
-          cycles: 1,
-          string_encryption: false,
-          fake_loops: 0,
+          level: obfuscationLevel,
+          passes: {
+            flattening: enableFlattening,
+            substitution: enableSubstitution,
+            bogus_control_flow: enableBogusCF,
+            split: enableSplit
+          },
+          cycles: cycles,
+          string_encryption: enableStringEncryption,
+          fake_loops: fakeLoops,
           symbol_obfuscation: {
             enabled: enableSymbolObf,
             algorithm: symbolAlgorithm,
@@ -158,7 +177,12 @@ function App() {
     } finally {
       setLoading(false);
     }
-  }, [file, selectedFlags, enableSymbolObf, symbolAlgorithm, symbolHashLength, symbolPrefix, symbolSalt]);
+  }, [
+    file, selectedFlags, obfuscationLevel, cycles,
+    enableFlattening, enableSubstitution, enableBogusCF, enableSplit,
+    enableStringEncryption, fakeLoops,
+    enableSymbolObf, symbolAlgorithm, symbolHashLength, symbolPrefix, symbolSalt
+  ]);
 
   const onFetchReport = useCallback(async () => {
     if (!jobId) return;
@@ -278,7 +302,144 @@ function App() {
 
           <Box>
             <Typography variant="subtitle1" gutterBottom>
-              3) Symbol Obfuscation (Layer 4 - NEW!)
+              3) Obfuscation Configuration
+            </Typography>
+
+            <Grid container spacing={2} sx={{ mb: 2 }}>
+              <Grid item xs={12} sm={6}>
+                <FormControl fullWidth size="small">
+                  <InputLabel>Obfuscation Level</InputLabel>
+                  <Select
+                    value={obfuscationLevel}
+                    label="Obfuscation Level"
+                    onChange={(e) => setObfuscationLevel(Number(e.target.value))}
+                  >
+                    <MenuItem value={1}>Level 1 - Minimal</MenuItem>
+                    <MenuItem value={2}>Level 2 - Low</MenuItem>
+                    <MenuItem value={3}>Level 3 - Medium (Recommended)</MenuItem>
+                    <MenuItem value={4}>Level 4 - High</MenuItem>
+                    <MenuItem value={5}>Level 5 - Maximum</MenuItem>
+                  </Select>
+                </FormControl>
+              </Grid>
+
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  fullWidth
+                  size="small"
+                  label="Obfuscation Cycles"
+                  type="number"
+                  value={cycles}
+                  onChange={(e) => setCycles(parseInt(e.target.value) || 1)}
+                  inputProps={{ min: 1, max: 5 }}
+                  helperText="Apply obfuscation multiple times (1-5)"
+                />
+              </Grid>
+            </Grid>
+          </Box>
+
+          <Divider />
+
+          <Box>
+            <Typography variant="subtitle1" gutterBottom>
+              4) Layer 2: OLLVM Compiler Passes
+            </Typography>
+            <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
+              LLVM IR-level obfuscation passes (5-10% overhead)
+            </Typography>
+
+            <FormGroup>
+              <Grid container spacing={1}>
+                <Grid item xs={12} sm={6}>
+                  <FormControlLabel
+                    control={
+                      <Checkbox
+                        checked={enableFlattening}
+                        onChange={(e) => setEnableFlattening(e.target.checked)}
+                      />
+                    }
+                    label="Control Flow Flattening"
+                  />
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <FormControlLabel
+                    control={
+                      <Checkbox
+                        checked={enableSubstitution}
+                        onChange={(e) => setEnableSubstitution(e.target.checked)}
+                      />
+                    }
+                    label="Instruction Substitution"
+                  />
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <FormControlLabel
+                    control={
+                      <Checkbox
+                        checked={enableBogusCF}
+                        onChange={(e) => setEnableBogusCF(e.target.checked)}
+                      />
+                    }
+                    label="Bogus Control Flow"
+                  />
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <FormControlLabel
+                    control={
+                      <Checkbox
+                        checked={enableSplit}
+                        onChange={(e) => setEnableSplit(e.target.checked)}
+                      />
+                    }
+                    label="Basic Block Splitting"
+                  />
+                </Grid>
+              </Grid>
+            </FormGroup>
+          </Box>
+
+          <Divider />
+
+          <Box>
+            <Typography variant="subtitle1" gutterBottom>
+              5) Layer 3: Targeted Function Obfuscation
+            </Typography>
+            <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
+              Source-level transformations (~2-10% overhead)
+            </Typography>
+
+            <FormGroup>
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    checked={enableStringEncryption}
+                    onChange={(e) => setEnableStringEncryption(e.target.checked)}
+                  />
+                }
+                label="String Encryption (XOR) - Hides secrets in binaries"
+              />
+            </FormGroup>
+
+            <TextField
+              sx={{ mt: 1 }}
+              size="small"
+              label="Fake Loops"
+              type="number"
+              value={fakeLoops}
+              onChange={(e) => setFakeLoops(parseInt(e.target.value) || 0)}
+              inputProps={{ min: 0, max: 50 }}
+              helperText="Insert fake loop constructs (0-50)"
+            />
+          </Box>
+
+          <Divider />
+
+          <Box>
+            <Typography variant="subtitle1" gutterBottom>
+              6) Layer 0: Symbol Obfuscation (Source-Level)
+            </Typography>
+            <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
+              Applied FIRST before other layers (0% overhead)
             </Typography>
             <FormGroup>
               <FormControlLabel
@@ -358,7 +519,137 @@ function App() {
 
           <Box>
             <Typography variant="subtitle1" gutterBottom>
-              4) Submit and process
+              7) Quick Presets
+            </Typography>
+            <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
+              Apply documented best-practice configurations
+            </Typography>
+
+            <Stack direction="row" spacing={1} sx={{ mb: 2, flexWrap: 'wrap' }}>
+              <Button
+                variant="outlined"
+                size="small"
+                onClick={() => {
+                  // Standard: Level 3, String encryption, Symbol obf, Layer 1 flags
+                  setObfuscationLevel(3);
+                  setCycles(1);
+                  setEnableFlattening(false);
+                  setEnableSubstitution(false);
+                  setEnableBogusCF(false);
+                  setEnableSplit(false);
+                  setEnableStringEncryption(true);
+                  setFakeLoops(0);
+                  setEnableSymbolObf(true);
+                  setSelectedFlags(['-flto', '-fvisibility=hidden', '-O3', '-fno-builtin',
+                                   '-flto=thin', '-fomit-frame-pointer', '-mspeculative-load-hardening',
+                                   '-O1']);
+                  setToast('Applied STANDARD preset: ~10% overhead, 10x harder to RE');
+                }}
+              >
+                Standard
+              </Button>
+
+              <Button
+                variant="outlined"
+                size="small"
+                onClick={() => {
+                  // Maximum: Level 4, All OLLVM passes, String encryption, Symbol obf
+                  setObfuscationLevel(4);
+                  setCycles(1);
+                  setEnableFlattening(true);
+                  setEnableSubstitution(true);
+                  setEnableBogusCF(true);
+                  setEnableSplit(true);
+                  setEnableStringEncryption(true);
+                  setFakeLoops(0);
+                  setEnableSymbolObf(true);
+                  setSelectedFlags(['-flto', '-fvisibility=hidden', '-O3', '-fno-builtin',
+                                   '-flto=thin', '-fomit-frame-pointer', '-mspeculative-load-hardening',
+                                   '-O1']);
+                  setToast('Applied MAXIMUM preset: ~15-20% overhead, 15-20x harder to RE');
+                }}
+              >
+                Maximum
+              </Button>
+
+              <Button
+                variant="outlined"
+                size="small"
+                onClick={() => {
+                  // Ultimate: Level 5, All layers, Cycles 2, Fake loops 10
+                  setObfuscationLevel(5);
+                  setCycles(2);
+                  setEnableFlattening(true);
+                  setEnableSubstitution(true);
+                  setEnableBogusCF(true);
+                  setEnableSplit(true);
+                  setEnableStringEncryption(true);
+                  setFakeLoops(10);
+                  setEnableSymbolObf(true);
+                  setSelectedFlags(['-flto', '-fvisibility=hidden', '-O3', '-fno-builtin',
+                                   '-flto=thin', '-fomit-frame-pointer', '-mspeculative-load-hardening',
+                                   '-O1']);
+                  setToast('Applied ULTIMATE preset: ~25-30% overhead, 50x+ harder to RE');
+                }}
+              >
+                Ultimate
+              </Button>
+
+              <Button
+                variant="outlined"
+                size="small"
+                color="warning"
+                onClick={() => {
+                  // Reset all settings
+                  setObfuscationLevel(3);
+                  setCycles(1);
+                  setEnableFlattening(false);
+                  setEnableSubstitution(false);
+                  setEnableBogusCF(false);
+                  setEnableSplit(false);
+                  setEnableStringEncryption(false);
+                  setFakeLoops(0);
+                  setEnableSymbolObf(false);
+                  setSymbolAlgorithm('sha256');
+                  setSymbolHashLength(12);
+                  setSymbolPrefix('typed');
+                  setSymbolSalt('');
+                  setSelectedFlags([]);
+                  setToast('Reset all configuration to defaults');
+                }}
+              >
+                Reset
+              </Button>
+
+              <Button
+                variant="outlined"
+                size="small"
+                color="secondary"
+                onClick={() => {
+                  // Layer 1 Optimal: Just the 9 optimal flags
+                  setSelectedFlags([
+                    '-flto',
+                    '-fvisibility=hidden',
+                    '-O3',
+                    '-fno-builtin',
+                    '-flto=thin',
+                    '-fomit-frame-pointer',
+                    '-mspeculative-load-hardening',
+                    '-O1'
+                  ]);
+                  setToast('Applied Layer 1 Optimal Flags (82.5/100 score)');
+                }}
+              >
+                Layer 1 Optimal
+              </Button>
+            </Stack>
+          </Box>
+
+          <Divider />
+
+          <Box>
+            <Typography variant="subtitle1" gutterBottom>
+              8) Submit and Process
             </Typography>
             <Stack direction="row" spacing={2} alignItems="center">
               <Button variant="contained" onClick={onSubmit} disabled={!file || loading}>
@@ -387,7 +678,7 @@ function App() {
 
           <Box>
             <Typography variant="subtitle1" gutterBottom>
-              5) View report (optional)
+              9) View Report (Optional)
             </Typography>
             <Stack direction="row" spacing={2} alignItems="center" sx={{ mb: 1 }}>
               <Button variant="outlined" onClick={onFetchReport} disabled={!jobId || loading}>
