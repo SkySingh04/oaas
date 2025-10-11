@@ -1,0 +1,68 @@
+name: Deploy PB Obfuscator
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    env:
+      REGISTRY: ghcr.io
+      IMAGE_BACKEND: ghcr.io/${{ github.repository }}/pb-obfuscator-backend
+      IMAGE_FRONTEND: ghcr.io/${{ github.repository }}/pb-obfuscator-frontend
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build backend image
+        run: |
+          docker build -f cmd/llvm-obfuscator/Dockerfile.backend -t $IMAGE_BACKEND:latest cmd/llvm-obfuscator
+
+      - name: Build frontend image
+        run: |
+          docker build -f cmd/llvm-obfuscator/frontend/Dockerfile.frontend -t $IMAGE_FRONTEND:latest cmd/llvm-obfuscator/frontend
+
+      - name: Push images
+        run: |
+          docker push $IMAGE_BACKEND:latest
+          docker push $IMAGE_FRONTEND:latest
+
+      - name: Deploy to PB server
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.PB_HOST }}
+          username: ${{ secrets.PB_USER }}
+          key: ${{ secrets.PB_SSH_KEY }}
+          script_stop: true
+          script: |
+            set -e
+            mkdir -p ~/pb-obfuscator
+            cd ~/pb-obfuscator
+            cat > docker-compose.yml << 'EOF'
+            version: "3.9"
+            services:
+              backend:
+                image: ${{ env.IMAGE_BACKEND }}:latest
+                environment:
+                  - OBFUSCATOR_DISABLE_AUTH=true
+                ports:
+                  - "8000:8000"
+              frontend:
+                image: ${{ env.IMAGE_FRONTEND }}:latest
+                ports:
+                  - "80:80"
+                depends_on:
+                  - backend
+            EOF
+            docker compose pull || true
+            docker compose up -d
+
+

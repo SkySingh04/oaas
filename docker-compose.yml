@@ -1,0 +1,26 @@
+version: "3.9"
+
+services:
+  backend:
+    build:
+      context: ./cmd/llvm-obfuscator
+      dockerfile: Dockerfile.backend
+    image: pb-obfuscator-backend:latest
+    environment:
+      - OBFUSCATOR_DISABLE_AUTH=true
+    volumes:
+      - ./cmd/llvm-obfuscator/reports:/app/reports
+    expose:
+      - "8000"
+
+  frontend:
+    build:
+      context: ./cmd/llvm-obfuscator/frontend
+      dockerfile: Dockerfile.frontend
+    image: pb-obfuscator-frontend:latest
+    ports:
+      - "8080:80"
+    depends_on:
+      - backend
+
+
