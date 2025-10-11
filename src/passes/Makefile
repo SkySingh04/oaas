@@ -20,6 +20,7 @@ else
 endif
 
 TARGET = SimpleObfuscator.$(SO_EXT)
+MBA    = LinearMBA.$(SO_EXT)
 
 # Locate tooling for stripping and verification
 LLVM_BINDIR := $(shell $(LLVM_CONFIG) --bindir 2>/dev/null)
@@ -50,6 +51,7 @@ READOBJ_CMD := $(shell \
     fi)
 
 all: $(TARGET)
+all: $(TARGET) $(MBA)
 
 $(TARGET): SimpleObfuscator.cpp
 	$(CXX) $(SHARED_FLAG) $(CXXFLAGS) $< -o $@ $(LDFLAGS)
@@ -68,8 +70,11 @@ $(TARGET): SimpleObfuscator.cpp
 		echo "Warning: unable to verify debug sections for $@"; \
 	fi
 
+$(MBA): ../linearMBA.cpp
+	$(CXX) $(SHARED_FLAG) $(CXXFLAGS) $< -o $@ $(LDFLAGS)
+
 clean:
-	rm -f $(TARGET) SimpleObfuscator.so SimpleObfuscator.dylib
+	rm -f $(TARGET) $(MBA) SimpleObfuscator.so SimpleObfuscator.dylib LinearMBA.so LinearMBA.dylib
 
 test: $(TARGET)
 	@echo "Building test IR..."
