@@ -1,0 +1,76 @@
+{
+  "input_parameters": {
+    "source_file": "../../src/simple_auth.c",
+    "platform": "linux",
+    "obfuscation_level": 4,
+    "enabled_passes": [
+      "flattening"
+    ],
+    "compiler_flags": [
+      "-flto",
+      "-fvisibility=hidden",
+      "-O3",
+      "-fno-builtin",
+      "-flto=thin",
+      "-fomit-frame-pointer",
+      "-mspeculative-load-hardening",
+      "-O1",
+      "-Wl,-s"
+    ],
+    "timestamp": "2025-10-11T11:45:40.813702Z"
+  },
+  "output_attributes": {
+    "file_size": 33656,
+    "binary_format": "unknown",
+    "sections": {
+      "__text": 1332,
+      "__stubs": 48,
+      "__const": 13,
+      "__cstring": 404,
+      "__unwind_info": 112,
+      "__got": 40,
+      "__bss": 4
+    },
+    "symbols_count": 7,
+    "functions_count": 2,
+    "entropy": 0.871,
+    "obfuscation_methods": [
+      "flattening"
+    ]
+  },
+  "bogus_code_info": {
+    "dead_code_blocks": 3,
+    "opaque_predicates": 2,
+    "junk_instructions": 5,
+    "code_bloat_percentage": 6.5
+  },
+  "cycles_completed": {
+    "total_cycles": 1,
+    "per_cycle_metrics": [
+      {
+        "cycle": 1,
+        "passes_applied": [
+          "flattening"
+        ],
+        "duration_ms": 500
+      }
+    ]
+  },
+  "string_obfuscation": {
+    "total_strings": 0,
+    "encrypted_strings": 0,
+    "encryption_method": "none",
+    "encryption_percentage": 0.0
+  },
+  "fake_loops_inserted": {
+    "count": 0,
+    "types": [],
+    "locations": []
+  },
+  "obfuscation_score": 58.0,
+  "symbol_reduction": 30,
+  "function_reduction": 15,
+  "size_reduction": 5,
+  "entropy_increase": 0.09,
+  "estimated_re_effort": "4-6 weeks"
+}

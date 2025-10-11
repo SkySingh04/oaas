@@ -19,3 +19,8 @@ dist/
 
 node_modules/
 symbol_maps/
+
+# Test binaries
+cmd/llvm-obfuscator/test_*/simple_auth
+cmd/llvm-obfuscator/test_*/*_test
+cmd/llvm-obfuscator/obfuscated/
