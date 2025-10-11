@@ -2,18 +2,18 @@
 
 This directory contains platform-specific LLVM 22 toolchain binaries.
 
-## ⚠️ Binaries Not Included in Git
+## ✅ Binaries Stored in Git via Git LFS
 
-The actual binary files are **NOT stored in git** due to GitHub's file size limits.
+The binary files are **stored in git using Git LFS** (Large File Storage).
 
-**Binary files that belong here:**
+**Binary files included:**
 - `opt` (57-60 MB) - LLVM optimizer with OLLVM passes
 - `clang` (117-123 MB) - LLVM 22 compiler
 - `LLVMObfuscationPlugin.{so,dylib,dll}` (116-150 KB) - Obfuscation plugin
 
 These files are:
-- ❌ **NOT in git repository** (too large for GitHub)
-- ✅ **Built during development** (using build scripts)
+- ✅ **Stored in git via Git LFS** (no rebuild needed after clone)
+- ✅ **Automatically downloaded** when you clone the repo
 - ✅ **Bundled in distribution packages** (wheels, pip packages)
 
 ## Directory Structure
@@ -119,18 +119,22 @@ pip install llvm-obfuscator
 
 The binaries are **automatically included** in the package. No manual building required!
 
-## Why Not in Git?
+## Git LFS Setup
 
-GitHub has file size limits:
-- ⚠️ Warning at 50 MB
-- ❌ Error at 100 MB
+GitHub has file size limits (100 MB max), so we use **Git LFS** for large binaries.
 
-Our binaries:
-- `clang`: 117-123 MB ← Exceeds limit
-- `opt`: 57-60 MB ← Exceeds warning
-- `plugin`: 116-150 KB ← OK
+**What is Git LFS?**
+- Stores large files on GitHub's LFS servers
+- Git only stores small pointer files
+- Files download automatically on clone
+- No special commands needed for most operations
 
-**Solution:** Build locally, distribute via pip packages.
+**Our binaries:**
+- `clang`: 117-123 MB ← Stored via LFS
+- `opt`: 57-60 MB ← Stored via LFS
+- `plugin`: 116-150 KB ← Stored via LFS
+
+**Solution:** Git LFS handles everything automatically!
 
 ## File Size Summary
 
