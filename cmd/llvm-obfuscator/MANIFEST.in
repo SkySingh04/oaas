@@ -5,10 +5,12 @@ include README.md
 include LICENSE
 include requirements.txt
 
-# Plugin binaries
+# Complete LLVM 22 toolchain binaries (opt + clang + plugin)
 recursive-include plugins *.dylib
 recursive-include plugins *.so
 recursive-include plugins *.dll
+recursive-include plugins opt
+recursive-include plugins clang
 include plugins/LICENSE
 include plugins/NOTICE
 

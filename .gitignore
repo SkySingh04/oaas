@@ -19,3 +19,10 @@ dist/
 
 node_modules/
 symbol_maps/
+
+# LLVM binaries (built during packaging, not stored in git)
+cmd/llvm-obfuscator/plugins/*/opt
+cmd/llvm-obfuscator/plugins/*/clang
+cmd/llvm-obfuscator/plugins/*/*.so
+cmd/llvm-obfuscator/plugins/*/*.dylib
+cmd/llvm-obfuscator/plugins/*/*.dll
