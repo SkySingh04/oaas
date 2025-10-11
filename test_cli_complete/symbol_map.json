@@ -1,0 +1,116 @@
+{
+   "hash_algorithm" : 0,
+   "symbols" : [
+      {
+         "address" : 0,
+         "line" : 0,
+         "linkage" : 0,
+         "obfuscated" : "f_7e9e5ac30f22",
+         "original" : "add",
+         "size" : 0,
+         "source_file" : "",
+         "type" : 0
+      },
+      {
+         "address" : 0,
+         "line" : 0,
+         "linkage" : 0,
+         "obfuscated" : "f_9c04c1f30d82",
+         "original" : "encrypt_all",
+         "size" : 0,
+         "source_file" : "",
+         "type" : 0
+      },
+      {
+         "address" : 0,
+         "line" : 0,
+         "linkage" : 0,
+         "obfuscated" : "f_200c7e622003",
+         "original" : "activate",
+         "size" : 0,
+         "source_file" : "",
+         "type" : 0
+      },
+      {
+         "address" : 0,
+         "line" : 0,
+         "linkage" : 0,
+         "obfuscated" : "f_8df5b6ad2515",
+         "original" : "enable_cloud_sync",
+         "size" : 0,
+         "source_file" : "",
+         "type" : 0
+      },
+      {
+         "address" : 0,
+         "line" : 0,
+         "linkage" : 0,
+         "obfuscated" : "f_13b221bf5b83",
+         "original" : "add_license",
+         "size" : 0,
+         "source_file" : "",
+         "type" : 0
+      },
+      {
+         "address" : 0,
+         "line" : 0,
+         "linkage" : 0,
+         "obfuscated" : "f_1c453e6237e9",
+         "original" : "validate_all",
+         "size" : 0,
+         "source_file" : "",
+         "type" : 0
+      },
+      {
+         "address" : 0,
+         "line" : 0,
+         "linkage" : 0,
+         "obfuscated" : "f_3df4dddaeb27",
+         "original" : "display_all",
+         "size" : 0,
+         "source_file" : "",
+         "type" : 0
+      },
+      {
+         "address" : 0,
+         "line" : 0,
+         "linkage" : 0,
+         "obfuscated" : "f_03bc551e3634",
+         "original" : "sign_license",
+         "size" : 0,
+         "source_file" : "",
+         "type" : 0
+      },
+      {
+         "address" : 0,
+         "line" : 0,
+         "linkage" : 0,
+         "obfuscated" : "f_4948265903cc",
+         "original" : "verify_signature",
+         "size" : 0,
+         "source_file" : "",
+         "type" : 0
+      },
+      {
+         "address" : 0,
+         "line" : 0,
+         "linkage" : 0,
+         "obfuscated" : "f_f707f7349698",
+         "original" : "encrypt_data",
+         "size" : 0,
+         "source_file" : "",
+         "type" : 0
+      },
+      {
+         "address" : 0,
+         "line" : 0,
+         "linkage" : 0,
+         "obfuscated" : "v_005177510dcd",
+         "original" : "max_users",
+         "size" : 0,
+         "source_file" : "",
+         "type" : 1
+      }
+   ],
+   "version" : "1.0"
+}

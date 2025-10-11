@@ -291,13 +291,25 @@ static void _secure_free(char* ptr) {
         import re
 
         const_globals = []
-        # Pattern: const char* IDENTIFIER = "string";
+
+        # Pattern 1: C-style - const char* IDENTIFIER = "string";
         # Also matches: static const char* or const char *
-        pattern = r'^\s*(static\s+)?const\s+char\s*\*\s+(\w+)\s*=\s*"([^"]+)"\s*;'
+        c_pattern = r'^\s*(static\s+)?const\s+char\s*\*\s+(\w+)\s*=\s*"([^"]+)"\s*;'
+
+        # Pattern 2: C++ style - const std::string IDENTIFIER = "string";
+        cpp_pattern = r'^\s*(static\s+)?const\s+std::string\s+(\w+)\s*=\s*"([^"]+)"\s*;'
 
         lines = source.split('\n')
         for line_num, line in enumerate(lines):
-            match = re.match(pattern, line)
+            # Try C pattern first
+            match = re.match(c_pattern, line)
+            is_cpp_string = False
+
+            # If no C match, try C++ pattern
+            if not match:
+                match = re.match(cpp_pattern, line)
+                is_cpp_string = True
+
             if match:
                 static_prefix = match.group(1) or ""
                 var_name = match.group(2)
@@ -323,6 +335,7 @@ static void _secure_free(char* ptr) {
                     'static_prefix': static_prefix,
                     'original_line': line,
                     'type': 'const_global',
+                    'is_cpp_string': is_cpp_string,  # Track if it's C++ std::string
                 })
 
         return const_globals
@@ -332,9 +345,12 @@ static void _secure_free(char* ptr) {
         Transform const global declarations to use encrypted strings.
 
         Strategy:
-        1. Replace const declarations with static variables initialized to NULL
+        1. Replace const declarations with static variables initialized to NULL/""
         2. Generate a static constructor function that initializes them
         3. Use __attribute__((constructor)) to run before main()
+
+        For C++ std::string: Keep as std::string but initialize empty
+        For C char*: Change to char* initialized to NULL
         """
         lines = source.split('\n')
 
@@ -343,9 +359,14 @@ static void _secure_free(char* ptr) {
             line_num = info['line_num']
             var_name = info['var_name']
             static_prefix = info['static_prefix']
+            is_cpp_string = info.get('is_cpp_string', False)
 
-            # Replace with: static char* VAR_NAME = NULL;
-            lines[line_num] = f"{static_prefix}char* {var_name} = NULL;"
+            if is_cpp_string:
+                # For C++ std::string: std::string VAR_NAME = "";
+                lines[line_num] = f"{static_prefix}std::string {var_name} = \"\";"
+            else:
+                # For C char*: char* VAR_NAME = NULL;
+                lines[line_num] = f"{static_prefix}char* {var_name} = NULL;"
 
         # Step 2: Generate initialization function
         init_lines = [
@@ -359,22 +380,53 @@ static void _secure_free(char* ptr) {
             encrypted_hex = info['encrypted_hex']
             length = info['length']
             key = info['key']
-            init_lines.append(
-                f"    {var_name} = _xor_decrypt((const unsigned char[]){{{encrypted_hex}}}, {length}, 0x{key:02x});"
-            )
+            is_cpp_string = info.get('is_cpp_string', False)
+
+            if is_cpp_string:
+                # For C++ std::string, assign decrypted char* to std::string (implicit conversion)
+                init_lines.append(
+                    f"    {var_name} = std::string(_xor_decrypt((const unsigned char[]){{{encrypted_hex}}}, {length}, 0x{key:02x}));"
+                )
+            else:
+                # For C char*, direct assignment
+                init_lines.append(
+                    f"    {var_name} = _xor_decrypt((const unsigned char[]){{{encrypted_hex}}}, {length}, 0x{key:02x});"
+                )
 
         init_lines.append("}")
         init_lines.append("")
 
-        # Step 3: Find where to inject the init function (after global variables)
-        # Find the last global variable declaration
+        # Step 3: Find where to inject the init function (after global variables, before first class/function)
+        # Look for first enum, class, template, or function definition
         inject_pos = len(lines)
+        in_block_comment = False
+
         for i, line in enumerate(lines):
             stripped = line.strip()
-            # Look for start of first function (indicated by opening brace at start of line)
-            if stripped and not stripped.startswith('//') and not stripped.startswith('/*'):
-                if 'int ' in line and '(' in line and ')' in line:
-                    # Found a function definition
+
+            # Track block comments
+            if '/*' in stripped:
+                in_block_comment = True
+            if '*/' in stripped:
+                in_block_comment = False
+                continue
+
+            # Skip if in block comment, line comment, or empty
+            if in_block_comment or not stripped or stripped.startswith('//') or stripped.startswith('*'):
+                continue
+
+            # Found a global variable declaration (our transformed strings)
+            if stripped.startswith('std::string ') and '= "";' in stripped:
+                continue  # Keep going, we're still in the globals section
+
+            # Look for enum, class, template, or function definition (these come after globals)
+            if any(keyword in stripped for keyword in ['enum ', 'class ', 'template<', 'struct ']):
+                inject_pos = i
+                break
+            # Or a function definition with return type
+            if '(' in line and ')' in line and '{' not in stripped:
+                # Check next line for opening brace
+                if i + 1 < len(lines) and '{' in lines[i + 1]:
                     inject_pos = i
                     break
 
