@@ -9,6 +9,7 @@ from .exceptions import ObfuscationError
 from .fake_loop_inserter import FakeLoopGenerator
 from .reporter import ObfuscationReport
 from .string_encryptor import StringEncryptionResult, XORStringEncryptor
+from .symbol_obfuscator import SymbolObfuscator
 from .utils import (
     compute_entropy,
     create_logger,
@@ -53,6 +54,7 @@ class LLVMObfuscator:
         self.reporter = reporter
         self.encryptor = XORStringEncryptor()
         self.fake_loop_generator = FakeLoopGenerator()
+        self.symbol_obfuscator = SymbolObfuscator()
 
     def obfuscate(self, source_file: Path, config: ObfuscationConfig, job_id: Optional[str] = None) -> Dict:
         if not source_file.exists():
@@ -67,6 +69,31 @@ class LLVMObfuscator:
             require_tool("x86_64-w64-mingw32-gcc")
 
         source_content = source_file.read_text(encoding="utf-8", errors="ignore")
+
+        # Symbol obfuscation (if enabled) - applied FIRST before other transformations
+        symbol_result = None
+        working_source = source_file
+        if config.advanced.symbol_obfuscation.enabled:
+            try:
+                symbol_obfuscated_file = output_directory / f"{source_file.stem}_symbol_obfuscated{source_file.suffix}"
+                symbol_result = self.symbol_obfuscator.obfuscate(
+                    source_file=source_file,
+                    output_file=symbol_obfuscated_file,
+                    algorithm=config.advanced.symbol_obfuscation.algorithm,
+                    hash_length=config.advanced.symbol_obfuscation.hash_length,
+                    prefix_style=config.advanced.symbol_obfuscation.prefix_style,
+                    salt=config.advanced.symbol_obfuscation.salt,
+                    preserve_main=config.advanced.symbol_obfuscation.preserve_main,
+                    preserve_stdlib=config.advanced.symbol_obfuscation.preserve_stdlib,
+                    generate_map=True,
+                    map_file=output_directory / "symbol_map.json",
+                    is_cpp=source_file.suffix in [".cpp", ".cc", ".cxx"],
+                )
+                working_source = symbol_obfuscated_file
+                self.logger.info(f"Symbol obfuscation complete: {symbol_result['symbols_obfuscated']} symbols renamed")
+            except Exception as e:
+                self.logger.warning(f"Symbol obfuscation failed, continuing without it: {e}")
+
         string_result: Optional[StringEncryptionResult] = None
         if config.advanced.string_encryption:
             string_result = self.encryptor.encrypt_strings(source_content)
@@ -78,7 +105,7 @@ class LLVMObfuscator:
         enabled_passes = config.passes.enabled_passes()
         compiler_flags = merge_flags(self.BASE_FLAGS, config.compiler_flags)
 
-        intermediate_source = source_file
+        intermediate_source = working_source  # Use symbol-obfuscated source if enabled
         for cycle in range(1, config.advanced.cycles + 1):
             self.logger.info("Starting cycle %s/%s", cycle, config.advanced.cycles)
             intermediate_binary = output_binary if cycle == config.advanced.cycles else output_directory / f"{output_binary.stem}_cycle{cycle}{output_binary.suffix}"
@@ -122,12 +149,13 @@ class LLVMObfuscator:
                 "symbols_count": symbols_count,
                 "functions_count": functions_count,
                 "entropy": entropy,
-                "obfuscation_methods": enabled_passes,
+                "obfuscation_methods": enabled_passes + (["symbol_obfuscation"] if symbol_result else []),
             },
             "bogus_code_info": base_metrics["bogus_code_info"],
             "cycles_completed": base_metrics["cycles_completed"],
             "string_obfuscation": base_metrics["string_obfuscation"],
             "fake_loops_inserted": base_metrics["fake_loops_inserted"],
+            "symbol_obfuscation": symbol_result or {"enabled": False},
             "obfuscation_score": base_metrics["obfuscation_score"],
             "symbol_reduction": base_metrics["symbol_reduction"],
             "function_reduction": base_metrics["function_reduction"],

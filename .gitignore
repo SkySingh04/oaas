@@ -18,3 +18,4 @@ dist/
 .idea/
 
 node_modules/
+symbol_maps/
