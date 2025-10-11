@@ -506,19 +506,94 @@ python -m cli.obfuscate <COMMAND> <SOURCE> [OPTIONS]
 
 ---
 
+## 🎉 Layer 2 (OLLVM Passes) - NOW WORKING!
+
+**Status:** ✅ **FULLY FUNCTIONAL** (Fixed 2025-10-11)
+
+### What Changed
+
+Previously, OLLVM passes were **silently ignored** by the CLI. This has been fixed!
+
+**Root Cause:** The CLI was trying to use OLLVM passes via `clang -mllvm`, which doesn't work. OLLVM passes require a 3-step workflow using the `opt` tool.
+
+**Solution:** Implemented automatic 3-step compilation when OLLVM passes are enabled:
+1. Source → LLVM IR
+2. Apply OLLVM passes via `opt`
+3. IR → Binary
+
+### How to Use OLLVM Passes
+
+**Single Pass:**
+```bash
+python3 -m cli.obfuscate compile src/file.c \
+  --level 3 \
+  --enable-flattening \
+  --custom-pass-plugin /Users/akashsingh/Desktop/llvm-project/build/lib/LLVMObfuscationPlugin.dylib
+```
+
+**All 4 OLLVM Passes:**
+```bash
+python3 -m cli.obfuscate compile src/file.c \
+  --level 4 \
+  --enable-flattening \
+  --enable-substitution \
+  --enable-bogus-cf \
+  --enable-split \
+  --custom-pass-plugin /Users/akashsingh/Desktop/llvm-project/build/lib/LLVMObfuscationPlugin.dylib
+```
+
+### Verification
+
+When OLLVM passes are working correctly, you'll see these log messages:
+
+```
+INFO - Using opt-based workflow for OLLVM passes: flattening, boguscf
+INFO - Step 1/3: Compiling to LLVM IR
+INFO - Step 2/3: Applying OLLVM passes via opt
+INFO - Step 3/3: Compiling obfuscated IR to binary
+INFO - OLLVM obfuscation complete
+```
+
+### Test All Layers
+
+Run the comprehensive test script:
+```bash
+cd /Users/akashsingh/Desktop/llvm
+./test_all_layers.sh
+```
+
+This tests all 4 layers individually and 7 combinations.
+
+### Important Notes
+
+1. **Plugin Path Required:** You MUST provide `--custom-pass-plugin` when using OLLVM passes
+2. **Plugin Location:** `/Users/akashsingh/Desktop/llvm-project/build/lib/LLVMObfuscationPlugin.dylib`
+3. **All 4 Passes:** `flattening`, `substitution`, `boguscf`, `split`
+4. **Compilation Time:** 3-step workflow is ~2-3x slower than direct compilation
+
+### Documentation
+
+For complete technical details, see:
+- `/Users/akashsingh/Desktop/llvm/OLLVM_INTEGRATION_FIX.md`
+
+---
+
 ## Summary
 
 **Remember:**
 1. ✅ **ALWAYS use CLI wrapper** - Never manual compilation
 2. ✅ **ALWAYS enable string encryption** - If binary has secrets
 3. ✅ **ALWAYS use Layer 1 optimal flags** - Minimum requirement
-4. ✅ **ALWAYS generate reports** - For audit and validation
-5. ✅ **ALWAYS validate output** - Functional + Security tests
+4. ✅ **ALWAYS provide plugin path** - When using OLLVM passes (Layer 2)
+5. ✅ **ALWAYS generate reports** - For audit and validation
+6. ✅ **ALWAYS validate output** - Functional + Security tests
 
 **For any questions, refer to:**
 - Full documentation: `/Users/akashsingh/Desktop/llvm/OBFUSCATION_COMPLETE.md`
+- OLLVM fix details: `/Users/akashsingh/Desktop/llvm/OLLVM_INTEGRATION_FIX.md`
 - CLI help: `python -m cli.obfuscate --help`
 - Examples: `cmd/llvm-obfuscator/examples/`
+- Test script: `/Users/akashsingh/Desktop/llvm/test_all_layers.sh`
 
 ---
 

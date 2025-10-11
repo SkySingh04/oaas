@@ -39,7 +39,7 @@ class PassConfiguration:
             "flattening": self.flattening,
             "substitution": self.substitution,
             "boguscf": self.bogus_control_flow,
-            "split": self.split,
+            "split": self.split,  # Note: New PM uses "split", legacy uses "splitbbl"
         }
         return [name for name, enabled in mapping.items() if enabled]
 

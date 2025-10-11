@@ -56,6 +56,50 @@ class LLVMObfuscator:
         self.fake_loop_generator = FakeLoopGenerator()
         self.symbol_obfuscator = SymbolObfuscator()
 
+    def _get_bundled_plugin_path(self) -> Optional[Path]:
+        """Auto-detect bundled OLLVM plugin for current platform."""
+        try:
+            import platform
+            import os
+
+            system = platform.system().lower()  # darwin, linux, windows
+            machine = platform.machine().lower()  # arm64, x86_64, amd64
+
+            # Normalize architecture names
+            if machine in ['x86_64', 'amd64']:
+                arch = 'x86_64'
+            elif machine in ['arm64', 'aarch64']:
+                arch = 'arm64'
+            else:
+                self.logger.debug(f"Unsupported architecture for bundled plugin: {machine}")
+                return None
+
+            # Determine plugin extension by platform
+            if system == "darwin":
+                ext = "dylib"
+            elif system == "linux":
+                ext = "so"
+            elif system == "windows":
+                ext = "dll"
+            else:
+                self.logger.debug(f"Unsupported platform for bundled plugin: {system}")
+                return None
+
+            # Build path to bundled plugin
+            plugin_dir = Path(__file__).parent.parent / "plugins" / f"{system}-{arch}"
+            plugin_file = plugin_dir / f"LLVMObfuscationPlugin.{ext}"
+
+            if plugin_file.exists():
+                self.logger.info(f"Auto-detected bundled plugin: {plugin_file}")
+                return plugin_file
+            else:
+                self.logger.debug(f"Bundled plugin not found at: {plugin_file}")
+                return None
+
+        except Exception as e:
+            self.logger.debug(f"Could not auto-detect bundled plugin: {e}")
+            return None
+
     def obfuscate(self, source_file: Path, config: ObfuscationConfig, job_id: Optional[str] = None) -> Dict:
         if not source_file.exists():
             raise FileNotFoundError(f"Source file not found: {source_file}")
@@ -208,15 +252,119 @@ class LLVMObfuscator:
         else:
             compiler = "clang"
 
-        command = [compiler, str(source_abs), "-o", str(destination_abs)] + compiler_flags
-        if config.platform == Platform.WINDOWS:
-            command.extend(["--target=x86_64-w64-mingw32"])
+        # If OLLVM passes are requested, use 3-step workflow: source -> IR -> obfuscated IR -> binary
+        if enabled_passes:
+            # Determine which plugin to use (priority: explicit > env var > bundled)
+            import os
+            plugin_path = config.custom_pass_plugin
 
-        # Only apply passes if plugin is available
-        if config.custom_pass_plugin and enabled_passes:
-            command.extend(["-Xclang", "-load", "-Xclang", str(config.custom_pass_plugin)])
-            for opt_pass in enabled_passes:
-                command.extend(["-mllvm", f"-{opt_pass}"])
+            if not plugin_path:
+                # Try environment variable
+                env_plugin = os.getenv("LLVM_OBFUSCATION_PLUGIN")
+                if env_plugin:
+                    plugin_path = Path(env_plugin)
+                    if plugin_path.exists():
+                        self.logger.info(f"Using plugin from environment: {plugin_path}")
+                    else:
+                        self.logger.warning(f"Environment plugin not found: {plugin_path}")
+                        plugin_path = None
+
+            if not plugin_path:
+                # Try bundled plugin
+                plugin_path = self._get_bundled_plugin_path()
+
+            if not plugin_path or not plugin_path.exists():
+                self.logger.error(
+                    "OLLVM passes requested but no plugin found.\n"
+                    "Options:\n"
+                    "  1. Specify path: --custom-pass-plugin /path/to/LLVMObfuscationPlugin.dylib\n"
+                    "  2. Set environment: export LLVM_OBFUSCATION_PLUGIN=/path/to/plugin\n"
+                    "  3. Ensure bundled plugin exists for your platform\n"
+                    f"  4. Build plugin from: /Users/akashsingh/Desktop/llvm-project"
+                )
+                raise ObfuscationError("OLLVM plugin not found")
+
+        if enabled_passes and plugin_path:
+            self.logger.info("Using opt-based workflow for OLLVM passes: %s", ", ".join(enabled_passes))
+
+            # Step 1: Compile source to LLVM IR
+            ir_file = destination_abs.parent / f"{destination_abs.stem}_temp.ll"
+            ir_cmd = [compiler, str(source_abs), "-S", "-emit-llvm", "-o", str(ir_file)]
+            # Add platform target if Windows
+            if config.platform == Platform.WINDOWS:
+                ir_cmd.extend(["--target=x86_64-w64-mingw32"])
+
+            self.logger.info("Step 1/3: Compiling to LLVM IR")
+            run_command(ir_cmd, cwd=source_abs.parent)
+
+            # Step 2: Apply OLLVM passes using opt
+            obfuscated_ir = destination_abs.parent / f"{destination_abs.stem}_obfuscated.bc"
+
+            # Determine opt binary path
+            plugin_path_resolved = Path(plugin_path)
+
+            # Check if plugin is from LLVM build directory (contains /build/lib/)
+            if "/llvm-project/build/lib/" in str(plugin_path_resolved):
+                # Plugin is from LLVM build, try to find opt in same build
+                llvm_build_dir = plugin_path_resolved.parent.parent  # Go up from lib/ to build/
+                opt_binary = llvm_build_dir / "bin" / "opt"
+
+                if opt_binary.exists():
+                    self.logger.info("Using opt from LLVM build: %s", opt_binary)
+                else:
+                    self.logger.warning("Could not find opt in LLVM build, falling back to system opt")
+                    require_tool("opt")
+                    opt_binary = Path("opt")
+            else:
+                # Plugin is bundled or from custom location, use system opt
+                self.logger.info("Using system opt for bundled plugin")
+                # Try to find opt in known locations
+                opt_paths = [
+                    Path("/Users/akashsingh/Desktop/llvm-project/build/bin/opt"),
+                    Path("/usr/local/bin/opt"),
+                    Path("/opt/homebrew/bin/opt"),
+                ]
+
+                opt_binary = None
+                for opt_path in opt_paths:
+                    if opt_path.exists():
+                        opt_binary = opt_path
+                        self.logger.info("Found opt at: %s", opt_binary)
+                        break
+
+                if not opt_binary:
+                    require_tool("opt")
+                    opt_binary = Path("opt")
+
+            # Build the passes pipeline
+            passes_pipeline = ",".join(enabled_passes)
+            opt_cmd = [
+                str(opt_binary),
+                "-load-pass-plugin=" + str(plugin_path),
+                f"-passes={passes_pipeline}",
+                str(ir_file),
+                "-o", str(obfuscated_ir)
+            ]
+
+            self.logger.info("Step 2/3: Applying OLLVM passes via opt")
+            run_command(opt_cmd, cwd=source_abs.parent)
+
+            # Step 3: Compile obfuscated IR to binary
+            final_cmd = [compiler, str(obfuscated_ir), "-o", str(destination_abs)] + compiler_flags
+            if config.platform == Platform.WINDOWS:
+                final_cmd.extend(["--target=x86_64-w64-mingw32"])
+
+            self.logger.info("Step 3/3: Compiling obfuscated IR to binary")
+            run_command(final_cmd, cwd=source_abs.parent)
+
+            # Cleanup temporary files
+            if ir_file.exists():
+                ir_file.unlink()
+            if obfuscated_ir.exists():
+                obfuscated_ir.unlink()
+
+            self.logger.info("OLLVM obfuscation complete")
+
         elif enabled_passes:
             # Log warning but continue without passes
             self.logger.warning(
@@ -224,8 +372,16 @@ class LLVMObfuscator:
                 "Continuing with compiler flags only. Set custom_pass_plugin to enable passes.",
                 ", ".join(enabled_passes)
             )
-
-        run_command(command, cwd=source_abs.parent)
+            command = [compiler, str(source_abs), "-o", str(destination_abs)] + compiler_flags
+            if config.platform == Platform.WINDOWS:
+                command.extend(["--target=x86_64-w64-mingw32"])
+            run_command(command, cwd=source_abs.parent)
+        else:
+            # No OLLVM passes - standard compilation
+            command = [compiler, str(source_abs), "-o", str(destination_abs)] + compiler_flags
+            if config.platform == Platform.WINDOWS:
+                command.extend(["--target=x86_64-w64-mingw32"])
+            run_command(command, cwd=source_abs.parent)
 
     def _estimate_metrics(
         self,
