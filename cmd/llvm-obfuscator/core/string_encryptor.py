@@ -427,10 +427,11 @@ static void _secure_free(char* ptr) {
         init_lines.append("}")
         init_lines.append("")
 
-        # Step 3: Find where to inject the init function (after global variables, before first class/function)
-        # Look for first enum, class, template, or function definition
+        # Step 3: Find where to inject the init function (after global variables, before first function)
+        # Strategy: Find the first function definition (has return type, name, params, and opening brace)
         inject_pos = len(lines)
         in_block_comment = False
+        found_globals = False
 
         for i, line in enumerate(lines):
             stripped = line.strip()
@@ -446,18 +447,19 @@ static void _secure_free(char* ptr) {
             if in_block_comment or not stripped or stripped.startswith('//') or stripped.startswith('*'):
                 continue
 
-            # Found a global variable declaration (our transformed strings)
-            if stripped.startswith('std::string ') and '= "";' in stripped:
-                continue  # Keep going, we're still in the globals section
+            # Track if we've found our global variables
+            if ('char* ' in stripped or 'std::string ' in stripped) and '= NULL' in stripped or '= "";' in stripped:
+                found_globals = True
+                continue
 
-            # Look for enum, class, template, or function definition (these come after globals)
-            if any(keyword in stripped for keyword in ['enum ', 'class ', 'template<', 'struct ']):
-                inject_pos = i
-                break
-            # Or a function definition with return type
-            if '(' in line and ')' in line and '{' not in stripped:
-                # Check next line for opening brace
-                if i + 1 < len(lines) and '{' in lines[i + 1]:
+            # After finding globals, look for first function
+            if found_globals:
+                # Look for function definitions: int fname(...) or void fname(...)
+                # Check if line has function signature pattern and next line (or same line) has {
+                if ('(' in stripped and ')' in stripped and
+                    (stripped.startswith('int ') or stripped.startswith('void ') or
+                     stripped.startswith('char') or stripped.startswith('static'))):
+                    # This is likely a function definition
                     inject_pos = i
                     break
 

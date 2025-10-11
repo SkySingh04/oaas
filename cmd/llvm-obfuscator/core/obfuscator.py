@@ -141,9 +141,19 @@ class LLVMObfuscator:
         # String encryption (if enabled) - applied to source content
         string_result: Optional[StringEncryptionResult] = None
         if config.advanced.string_encryption:
-            # Temporarily disable string encryption due to UTF-8 corruption issues
-            self.logger.warning("String encryption temporarily disabled due to UTF-8 corruption issues")
-            string_result = None
+            try:
+                # Get the symbol-obfuscated source if available, otherwise use original
+                current_source_content = working_source.read_text(encoding="utf-8", errors="replace")
+                string_result = self.encryptor.encrypt_strings(current_source_content)
+
+                # Write the transformed source to a new file
+                string_encrypted_file = output_directory / f"{source_file.stem}_string_encrypted{source_file.suffix}"
+                string_encrypted_file.write_text(string_result.transformed_source, encoding="utf-8", errors="replace")
+                working_source = string_encrypted_file
+                self.logger.info(f"String encryption complete: {string_result.encrypted_strings}/{string_result.total_strings} strings encrypted")
+            except Exception as e:
+                self.logger.error(f"String encryption failed: {e}")
+                string_result = None
 
         fake_loops = []
         if config.advanced.fake_loops:
