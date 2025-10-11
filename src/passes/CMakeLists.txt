@@ -114,3 +114,16 @@ if(APPLE)
         SUFFIX ".dylib"
     )
 endif()
+
+# --- LinearMBA pass (new PM plugin) ---
+# Build the LinearMBA pass plugin alongside the existing SimpleObfuscator.
+# We reference the implementation placed one directory up to avoid duplication.
+add_library(LinearMBA MODULE ../linearMBA.cpp)
+target_link_libraries(LinearMBA PRIVATE ${LLVM_AVAILABLE_LIBS})
+
+if(APPLE)
+    set_target_properties(LinearMBA PROPERTIES
+        LINK_FLAGS "-undefined dynamic_lookup"
+        SUFFIX ".dylib"
+    )
+endif()
