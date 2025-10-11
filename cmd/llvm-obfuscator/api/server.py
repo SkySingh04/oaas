@@ -70,11 +70,18 @@ def _find_default_plugin() -> Tuple[Optional[str], bool]:
         return (str(candidate), candidate.exists())
 
     # 2) Common build locations relative to this file
-    repo_root = Path(__file__).resolve().parents[4]
+    try:
+        repo_root = Path(__file__).resolve().parents[4]
+    except IndexError:
+        # In container, fall back to current directory structure
+        repo_root = Path(__file__).resolve().parent
+    
     candidates = [
         repo_root / "llvm-project" / "build" / "lib" / "LLVMObfuscationPlugin.dylib",  # macOS
         repo_root / "llvm-project" / "build" / "lib" / "LLVMObfuscationPlugin.so",     # Linux
         repo_root / "llvm-project" / "build" / "bin" / "LLVMObfuscationPlugin.dll",    # Windows
+        repo_root / "core" / "plugins" / "LLVMObfuscationPlugin.dylib",               # Container fallback
+        repo_root / "core" / "plugins" / "LLVMObfuscationPlugin.so",                   # Container fallback
     ]
     for c in candidates:
         if c.exists():

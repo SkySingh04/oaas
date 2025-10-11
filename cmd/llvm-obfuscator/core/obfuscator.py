@@ -187,13 +187,31 @@ class LLVMObfuscator:
         compiler_flags: List[str],
         enabled_passes: List[str],
     ) -> None:
-        command = ["clang", str(source), "-o", str(destination)] + compiler_flags
+        # Detect compiler based on file extension
+        if source.suffix in ['.cpp', '.cxx', '.cc', '.c++']:
+            compiler = "clang++"
+            # Add C++ standard library linking
+            compiler_flags = compiler_flags + ["-lstdc++"]
+        else:
+            compiler = "clang"
+        
+        command = [compiler, str(source), "-o", str(destination)] + compiler_flags
         if config.platform == Platform.WINDOWS:
             command.extend(["--target=x86_64-w64-mingw32"])
-        if config.custom_pass_plugin:
+        
+        # Only apply passes if plugin is available
+        if config.custom_pass_plugin and enabled_passes:
             command.extend(["-Xclang", "-load", "-Xclang", str(config.custom_pass_plugin)])
-        for opt_pass in enabled_passes:
-            command.extend(["-mllvm", f"-{opt_pass}"])
+            for opt_pass in enabled_passes:
+                command.extend(["-mllvm", f"-{opt_pass}"])
+        elif enabled_passes:
+            # Log warning but continue without passes
+            self.logger.warning(
+                "OLLVM passes requested (%s) but no plugin available. "
+                "Continuing with compiler flags only. Set custom_pass_plugin to enable passes.",
+                ", ".join(enabled_passes)
+            )
+        
         run_command(command, cwd=source.parent)
 
     def _estimate_metrics(
