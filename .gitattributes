@@ -1,0 +1,5 @@
+cmd/llvm-obfuscator/plugins/*/opt filter=lfs diff=lfs merge=lfs -text
+cmd/llvm-obfuscator/plugins/*/clang filter=lfs diff=lfs merge=lfs -text
+cmd/llvm-obfuscator/plugins/*/*.so filter=lfs diff=lfs merge=lfs -text
+cmd/llvm-obfuscator/plugins/*/*.dylib filter=lfs diff=lfs merge=lfs -text
+cmd/llvm-obfuscator/plugins/*/*.dll filter=lfs diff=lfs merge=lfs -text
