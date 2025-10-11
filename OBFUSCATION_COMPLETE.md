@@ -7,6 +7,23 @@
 
 ---
 
+## 🔬 Latest Research: Optimization vs Obfuscation
+
+**NEW:** Comprehensive research on LLVM optimization impact on obfuscation effectiveness
+
+📊 **Key Finding:** Modern LLVM optimizations (O1/O2/O3) significantly reduce OLLVM obfuscation effectiveness (30-41% entropy loss)
+
+See: [OPTIMIZATION_VS_OBFUSCATION_RESEARCH.md](OPTIMIZATION_VS_OBFUSCATION_RESEARCH.md) for full analysis of 42 test configurations
+
+**Quick Takeaways:**
+- ✅ Layer 1 compiler flags ALONE are more effective than OLLVM passes (1 symbol vs 28 symbols)
+- ✅ O1 is most destructive to OLLVM obfuscation (41% entropy reduction)
+- ✅ Bogus CF + Flattening survive optimization best (skip Substitution + Split)
+- ✅ Pass ordering matters (68% entropy variation)
+- ⚠️ OLLVM + Layer 1 provides minimal improvement over Layer 1 alone (+1 symbol for 15% overhead)
+
+---
+
 ## 📋 Table of Contents
 
 1. [Executive Summary](#executive-summary)
@@ -24,6 +41,7 @@
 13. [Tool Reference](#tool-reference)
 14. [Research Journey](#research-journey)
 15. [Best Practices](#best-practices)
+16. **[NEW: Optimization vs Obfuscation Research](OPTIMIZATION_VS_OBFUSCATION_RESEARCH.md)**
 
 ---
 
