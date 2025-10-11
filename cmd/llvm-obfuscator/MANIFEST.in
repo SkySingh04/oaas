@@ -1,0 +1,27 @@
+# MANIFEST.in - Include additional files in distribution
+
+# Documentation
+include README.md
+include LICENSE
+include requirements.txt
+
+# Plugin binaries
+recursive-include plugins *.dylib
+recursive-include plugins *.so
+recursive-include plugins *.dll
+include plugins/LICENSE
+include plugins/NOTICE
+
+# Configuration examples
+recursive-include examples *.yaml
+recursive-include examples *.c
+recursive-include examples *.cpp
+
+# Exclude test directories
+prune tests
+prune test_*
+
+# Exclude Python cache
+global-exclude __pycache__
+global-exclude *.py[co]
+global-exclude .DS_Store

@@ -1,0 +1,68 @@
+# LLVM Obfuscation Plugin Notice
+
+This directory contains LLVM obfuscation pass plugins built from the LLVM project.
+
+## Origin
+
+These plugins are built from LLVM source code with custom obfuscation passes:
+- Source: https://github.com/llvm/llvm-project
+- Obfuscation passes based on OLLVM (Obfuscator-LLVM)
+- Custom modifications for modern LLVM compatibility
+
+## License
+
+Apache License 2.0 with LLVM Exceptions
+
+See LICENSE file for full license text.
+
+## Modifications
+
+The following obfuscation passes have been integrated:
+1. **Control Flow Flattening** - Converts control flow into switch-based state machines
+2. **Instruction Substitution** - Replaces instructions with complex equivalent sequences
+3. **Bogus Control Flow** - Inserts fake branches and unreachable code
+4. **Basic Block Splitting** - Splits basic blocks to increase complexity
+
+All passes have been ported to LLVM 19.x and modernized for the new pass manager.
+
+## Build Information
+
+Built from: /Users/akashsingh/Desktop/llvm-project
+Build date: 2025-10-11
+LLVM version: 19.x
+Build type: Release
+Target platforms:
+  - darwin-arm64 (macOS Apple Silicon)
+  - darwin-x86_64 (macOS Intel)
+  - linux-x86_64 (Linux)
+  - windows-x86_64 (Windows)
+
+## Attribution
+
+Original OLLVM project: https://github.com/obfuscator-llvm/obfuscator
+LLVM project: https://github.com/llvm/llvm-project
+
+## Usage
+
+These plugins are automatically detected by the llvm-obfuscator CLI when:
+- Using `--enable-flattening`
+- Using `--enable-substitution`
+- Using `--enable-bogus-cf`
+- Using `--enable-split`
+
+No manual plugin path specification required.
+
+## Size Information
+
+| Platform | File | Size |
+|----------|------|------|
+| macOS arm64 | LLVMObfuscationPlugin.dylib | ~132 KB |
+| macOS x86_64 | LLVMObfuscationPlugin.dylib | ~135 KB (est.) |
+| Linux x86_64 | LLVMObfuscationPlugin.so | ~140 KB (est.) |
+| Windows x86_64 | LLVMObfuscationPlugin.dll | ~150 KB (est.) |
+
+Total: ~560 KB
+
+---
+
+For questions or issues, see: https://github.com/yourorg/llvm-obfuscator/issues
