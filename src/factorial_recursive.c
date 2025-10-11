@@ -18,7 +18,7 @@ int validate_input(int n) {
     }
     return 1;
 }
-
+// Changes
 // Recursive factorial implementation
 unsigned long long factorial_recursive(int n) {
     if (n == 0 || n == 1) {
