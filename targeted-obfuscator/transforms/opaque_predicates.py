@@ -202,14 +202,18 @@ class OpaquePredicateInjector:
                 indent_str = ' ' * indent
 
                 # Generate always-false predicate
-                predicate = self._generate_opaque_predicate(PredicateType.ALWAYS_FALSE)
+                predicate_lines = self._generate_opaque_predicate(PredicateType.ALWAYS_FALSE).split('\n')
+                declaration = predicate_lines[0] if len(predicate_lines) > 1 else ""
+                condition = predicate_lines[1] if len(predicate_lines) > 1 else predicate_lines[0]
 
                 # Generate dead code
                 dead_code = self._generate_dead_code()
 
                 # Inject dead branch
                 injected = f"\n{indent_str}// Dead code branch (never taken)\n"
-                injected += f"{indent_str}if ({predicate}) {{\n"
+                if declaration:
+                    injected += f"{indent_str}{declaration}\n"
+                injected += f"{indent_str}{condition} {{\n"
                 for dead_line in dead_code.split('\n'):
                     if dead_line.strip():
                         injected += f"{indent_str}    {dead_line}\n"
@@ -289,10 +293,10 @@ class OpaquePredicateInjector:
         predicate = predicate.replace('{func}', 'main')  # Use known function
         predicate = predicate.replace('{type}', 'int')  # Use common type
 
-        # Add variable declaration if needed
+        # Add variable declaration if needed - use separate declaration and condition
         if '{var}' in template:
-            declaration = f"int {var_name} = {random.randint(1, 100)}; "
-            return declaration + predicate
+            declaration = f"int {var_name} = {random.randint(1, 100)};"
+            return f"{declaration}\n    if ({predicate})"
 
         return predicate
 

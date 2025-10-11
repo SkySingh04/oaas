@@ -175,7 +175,15 @@ def _sanitize_filename(name: str) -> str:
 
 def _decode_source(source_b64: str, destination: Path) -> None:
     decoded = base64.b64decode(source_b64)
-    destination.write_bytes(decoded)
+    # Ensure the decoded content is valid UTF-8
+    try:
+        # Try to decode as UTF-8 to validate
+        decoded_str = decoded.decode('utf-8')
+        # Write as UTF-8 text
+        destination.write_text(decoded_str, encoding='utf-8')
+    except UnicodeDecodeError:
+        # If it's not valid UTF-8, write as bytes (fallback)
+        destination.write_bytes(decoded)
 
 
 def _build_config_from_request(payload: ObfuscateRequest, destination_dir: Path) -> ObfuscationConfig:
