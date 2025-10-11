@@ -196,18 +196,22 @@ class LLVMObfuscator:
         compiler_flags: List[str],
         enabled_passes: List[str],
     ) -> None:
+        # Use absolute paths to avoid path resolution issues
+        source_abs = source.resolve()
+        destination_abs = destination.resolve()
+
         # Detect compiler based on file extension
-        if source.suffix in ['.cpp', '.cxx', '.cc', '.c++']:
+        if source_abs.suffix in ['.cpp', '.cxx', '.cc', '.c++']:
             compiler = "clang++"
             # Add C++ standard library linking
             compiler_flags = compiler_flags + ["-lstdc++"]
         else:
             compiler = "clang"
-        
-        command = [compiler, str(source), "-o", str(destination)] + compiler_flags
+
+        command = [compiler, str(source_abs), "-o", str(destination_abs)] + compiler_flags
         if config.platform == Platform.WINDOWS:
             command.extend(["--target=x86_64-w64-mingw32"])
-        
+
         # Only apply passes if plugin is available
         if config.custom_pass_plugin and enabled_passes:
             command.extend(["-Xclang", "-load", "-Xclang", str(config.custom_pass_plugin)])
@@ -220,8 +224,8 @@ class LLVMObfuscator:
                 "Continuing with compiler flags only. Set custom_pass_plugin to enable passes.",
                 ", ".join(enabled_passes)
             )
-        
-        run_command(command, cwd=source.parent)
+
+        run_command(command, cwd=source_abs.parent)
 
     def _estimate_metrics(
         self,

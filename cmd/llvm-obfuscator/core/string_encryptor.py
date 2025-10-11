@@ -25,10 +25,20 @@ class XORStringEncryptor:
         """
         Extract strings from C/C++ source and replace them with encrypted versions.
         Returns the transformed source code with decryption functions.
+
+        For const global strings, we use a two-phase approach:
+        1. Convert const globals to static non-const variables (initialized to NULL)
+        2. Generate a static constructor that initializes them with decrypted values
         """
+        # First, find const global string declarations
+        const_globals = self._extract_const_globals(source)
+
+        # Then find regular strings (in function bodies)
         strings_info = self._extract_strings_with_positions(source)
 
-        if not strings_info:
+        total_strings = len(const_globals) + len(strings_info)
+
+        if total_strings == 0:
             return StringEncryptionResult(
                 total_strings=0,
                 encrypted_strings=0,
@@ -44,29 +54,73 @@ class XORStringEncryptor:
         # Transform source by replacing strings with encrypted versions
         transformed_source = self._transform_source(source, strings_info)
 
+        # Transform const globals (more complex transformation)
+        if const_globals:
+            transformed_source = self._transform_const_globals(transformed_source, const_globals)
+
         # Add decryptor at the beginning (after includes)
         transformed_source = self._inject_decryptor(transformed_source, decryptor_code)
 
-        encrypted_count = len(strings_info)
-        percentage = 100.0 if encrypted_count > 0 else 0.0
+        encrypted_count = len(const_globals) + len(strings_info)
+        percentage = (encrypted_count / total_strings * 100.0) if total_strings > 0 else 0.0
 
         metadata = [
             {
                 "original": info["text"],
-                "encrypted": info["encrypted_hex"],
-                "key": str(info["key"]),
+                "encrypted": info.get("encrypted_hex", "N/A"),
+                "key": str(info.get("key", 0)),
+                "type": info.get("type", "inline"),
             }
-            for info in strings_info
+            for info in (list(const_globals) + strings_info)
         ]
 
         return StringEncryptionResult(
-            total_strings=len(strings_info),
+            total_strings=total_strings,
             encrypted_strings=encrypted_count,
             encryption_method="xor-rolling-key",
             encryption_percentage=round(percentage, 2),
             metadata=metadata,
             transformed_source=transformed_source,
         )
+
+    def _is_const_global_initializer(self, source: str, string_pos: int) -> bool:
+        """Check if a string at position string_pos is part of a const global initializer."""
+        # Look backward from string position to find context
+        # Pattern: const char* IDENTIFIER = "string"
+
+        # Find the line containing this string
+        line_start = source.rfind('\n', 0, string_pos) + 1
+        line_end = source.find('\n', string_pos)
+        if line_end == -1:
+            line_end = len(source)
+
+        line = source[line_start:line_end].strip()
+
+        # Check if line contains 'const' keyword
+        if 'const' not in line:
+            return False
+
+        # Check if it's at global scope (not indented inside a function)
+        # Look backward to see if we're inside braces
+        brace_depth = 0
+        for i in range(string_pos - 1, -1, -1):
+            if source[i] == '}':
+                brace_depth += 1
+            elif source[i] == '{':
+                brace_depth -= 1
+                # If we hit a '{' while depth is 0, we were at global scope
+                if brace_depth < 0:
+                    # Check if this is a function or struct/enum
+                    # Look backward to find what this brace belongs to
+                    before_brace = source[max(0, i-200):i].strip()
+                    # If we find a ')' before the '{', it's likely a function
+                    if ')' in before_brace:
+                        return False  # Inside a function, not global
+                    break
+
+        # If we're here and brace_depth is 0 or negative, we're at global scope
+        # and line contains 'const', so it's a const global initializer
+        return brace_depth <= 0 and 'const' in line
 
     def _extract_candidate_strings(self, source: str) -> List[str]:
         candidates: List[str] = []
@@ -121,11 +175,16 @@ class XORStringEncryptor:
                         # Skip format strings, usage messages, single-char strings, and strings used in printf contexts
                         # Also skip if string contains format specifiers or seems like output text
                         skip_patterns = ['%', 'Usage:', '===', 'ERROR:', 'FAIL:', 'SUCCESS:', 'Validating', 'Database']
+
+                        # Check if this string is part of a global const declaration
+                        is_const_global = self._is_const_global_initializer(source, start)
+
                         should_encrypt = (
                             len(text) > 2 and
                             not any(pat in text for pat in skip_patterns) and
                             not text.startswith(' ') and  # Skip indented strings (likely UI)
-                            text.replace('!', '').replace('.', '').replace(',', '').isalnum()  # Only encrypt simple alphanumeric secrets
+                            text.replace('!', '').replace('.', '').replace(',', '').isalnum() and  # Only encrypt simple alphanumeric secrets
+                            not is_const_global  # Don't encrypt const global initializers
                         )
 
                         if should_encrypt:
@@ -225,4 +284,102 @@ static void _secure_free(char* ptr) {
                 break
 
         lines.insert(insert_pos, decryptor_code)
+        return '\n'.join(lines)
+
+    def _extract_const_globals(self, source: str) -> List[Dict]:
+        """Extract const global string declarations like: const char* NAME = "value"; """
+        import re
+
+        const_globals = []
+        # Pattern: const char* IDENTIFIER = "string";
+        # Also matches: static const char* or const char *
+        pattern = r'^\s*(static\s+)?const\s+char\s*\*\s+(\w+)\s*=\s*"([^"]+)"\s*;'
+
+        lines = source.split('\n')
+        for line_num, line in enumerate(lines):
+            match = re.match(pattern, line)
+            if match:
+                static_prefix = match.group(1) or ""
+                var_name = match.group(2)
+                string_value = match.group(3)
+
+                # Skip format strings and UI strings
+                skip_patterns = ['%', 'Usage:', '===', 'ERROR:', 'FAIL:', 'SUCCESS:']
+                if any(pat in string_value for pat in skip_patterns):
+                    continue
+
+                # Encrypt this string
+                key = self._rand.randint(1, 255)
+                encrypted_bytes = [ord(ch) ^ key for ch in string_value]
+                encrypted_hex = ','.join([f'0x{b:02x}' for b in encrypted_bytes])
+
+                const_globals.append({
+                    'line_num': line_num,
+                    'var_name': var_name,
+                    'text': string_value,
+                    'key': key,
+                    'length': len(string_value),
+                    'encrypted_hex': encrypted_hex,
+                    'static_prefix': static_prefix,
+                    'original_line': line,
+                    'type': 'const_global',
+                })
+
+        return const_globals
+
+    def _transform_const_globals(self, source: str, const_globals: List[Dict]) -> str:
+        """
+        Transform const global declarations to use encrypted strings.
+
+        Strategy:
+        1. Replace const declarations with static variables initialized to NULL
+        2. Generate a static constructor function that initializes them
+        3. Use __attribute__((constructor)) to run before main()
+        """
+        lines = source.split('\n')
+
+        # Step 1: Replace const declarations
+        for info in const_globals:
+            line_num = info['line_num']
+            var_name = info['var_name']
+            static_prefix = info['static_prefix']
+
+            # Replace with: static char* VAR_NAME = NULL;
+            lines[line_num] = f"{static_prefix}char* {var_name} = NULL;"
+
+        # Step 2: Generate initialization function
+        init_lines = [
+            "",
+            "/* String decryption initialization (runs before main) */",
+            "__attribute__((constructor)) static void _init_encrypted_strings(void) {",
+        ]
+
+        for info in const_globals:
+            var_name = info['var_name']
+            encrypted_hex = info['encrypted_hex']
+            length = info['length']
+            key = info['key']
+            init_lines.append(
+                f"    {var_name} = _xor_decrypt((const unsigned char[]){{{encrypted_hex}}}, {length}, 0x{key:02x});"
+            )
+
+        init_lines.append("}")
+        init_lines.append("")
+
+        # Step 3: Find where to inject the init function (after global variables)
+        # Find the last global variable declaration
+        inject_pos = len(lines)
+        for i, line in enumerate(lines):
+            stripped = line.strip()
+            # Look for start of first function (indicated by opening brace at start of line)
+            if stripped and not stripped.startswith('//') and not stripped.startswith('/*'):
+                if 'int ' in line and '(' in line and ')' in line:
+                    # Found a function definition
+                    inject_pos = i
+                    break
+
+        # Insert initialization function
+        for line in reversed(init_lines):
+            lines.insert(inject_pos, line)
+
         return '\n'.join(lines)
