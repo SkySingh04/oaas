@@ -192,9 +192,9 @@ class FunctionCFGFlattener:
             }}
             """,
             """
-            // Impossible condition
-            int _x_{rand} = (int)&main;
-            if (_x_{rand} == 0) {{
+            // Impossible condition - avoid referencing main function
+            int _x_{rand} = {value};
+            if (_x_{rand} == 0 && _x_{rand} != 0) {{
                 abort();
             }}
             """,
@@ -264,7 +264,7 @@ class FunctionCFGFlattener:
                         ret_match = re.search(r'return\s+([^;]+);', block.code)
                         if ret_match:
                             dispatcher += f"            _ret_val = {ret_match.group(1)};\n"
-                    dispatcher += "            goto _exit;\n"
+                    dispatcher += "            return _ret_val;\n" if return_type and return_type != 'void' else "            return;\n"
                 else:
                     dispatcher += f"            _next_state = {block.next_state};\n"
 
@@ -273,14 +273,14 @@ class FunctionCFGFlattener:
         # Add default case (error)
         dispatcher += """        default:
             // Invalid state - should never reach here
-            goto _exit;
+            return _ret_val;
         }
 
         // Update state
         _state = _next_state;
     }
 
-_exit:
+    // Should never reach here, but add fallback return
 """
 
         # Add return statement

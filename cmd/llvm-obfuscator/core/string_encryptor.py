@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import random
+import re
 from dataclasses import dataclass
 from typing import Dict, List
 
@@ -57,6 +58,9 @@ class XORStringEncryptor:
         # Transform const globals (more complex transformation)
         if const_globals:
             transformed_source = self._transform_const_globals(transformed_source, const_globals)
+        
+        # Fix const char* declarations that now have function calls as initializers
+        transformed_source = self._fix_const_declarations(transformed_source)
 
         # Add decryptor at the beginning (after includes)
         transformed_source = self._inject_decryptor(transformed_source, decryptor_code)
@@ -174,16 +178,18 @@ class XORStringEncryptor:
 
                         # Skip format strings, usage messages, single-char strings, and strings used in printf contexts
                         # Also skip if string contains format specifiers or seems like output text
-                        skip_patterns = ['%', 'Usage:', '===', 'ERROR:', 'FAIL:', 'SUCCESS:', 'Validating', 'Database']
+                        skip_patterns = ['%', 'Usage:', '===', 'ERROR:', 'FAIL:', 'SUCCESS:', 'Validating', 'Database', '#include', '<', '>', 'std::', 'cout', 'endl']
 
                         # Check if this string is part of a global const declaration
                         is_const_global = self._is_const_global_initializer(source, start)
-
                         should_encrypt = (
                             len(text) > 2 and
                             not any(pat in text for pat in skip_patterns) and
                             not text.startswith(' ') and  # Skip indented strings (likely UI)
-                            text.replace('!', '').replace('.', '').replace(',', '').isalnum() and  # Only encrypt simple alphanumeric secrets
+                            not text.startswith('#') and  # Skip preprocessor directives
+                            not text.startswith('<') and  # Skip system headers
+                            not text.startswith('std::') and  # Skip standard library references
+                            text.replace('!', '').replace('.', '').replace(',', '').replace(' ', '').isalnum() and  # Only encrypt simple alphanumeric secrets
                             not is_const_global  # Don't encrypt const global initializers
                         )
 
@@ -246,12 +252,37 @@ static void _secure_free(char* ptr) {
             key = info['key']
             length = info['length']
 
-            # Generate replacement code
+            # Simple replacement - just replace the string literal with the function call
             replacement = f'_xor_decrypt((const unsigned char[]){{{encrypted_hex}}}, {length}, 0x{key:02x})'
-
             transformed = transformed[:start] + replacement + transformed[end:]
 
         return transformed
+
+    def _fix_const_declarations(self, source: str) -> str:
+        """Fix const char* declarations that have function calls as initializers."""
+        lines = source.split('\n')
+        fixed_lines = []
+        
+        for i, line in enumerate(lines):
+            # Check if this line has a const char* declaration with _xor_decrypt call
+            if 'const char*' in line and '_xor_decrypt' in line:
+                # Extract variable name
+                var_match = re.search(r'const char\*\s+(\w+)\s*=', line)
+                if var_match:
+                    var_name = var_match.group(1)
+                    # Replace with non-const declaration
+                    new_line = f"char* {var_name};"
+                    fixed_lines.append(new_line)
+                    
+                    # Add initialization on next line
+                    init_line = f"    {var_name} = {line.split('=', 1)[1].strip()};"
+                    fixed_lines.append(init_line)
+                else:
+                    fixed_lines.append(line)
+            else:
+                fixed_lines.append(line)
+        
+        return '\n'.join(fixed_lines)
 
     def _inject_decryptor(self, source: str, decryptor_code: str) -> str:
         """Inject decryption function after includes and initial comments."""
