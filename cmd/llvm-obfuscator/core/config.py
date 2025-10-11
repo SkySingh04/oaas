@@ -45,10 +45,22 @@ class PassConfiguration:
 
 
 @dataclass
+class SymbolObfuscationConfiguration:
+    enabled: bool = False
+    algorithm: str = "sha256"  # sha256, blake2b, siphash
+    hash_length: int = 12
+    prefix_style: str = "typed"  # none, typed, underscore
+    salt: Optional[str] = None
+    preserve_main: bool = True
+    preserve_stdlib: bool = True
+
+
+@dataclass
 class AdvancedConfiguration:
     cycles: int = 1
     string_encryption: bool = False
     fake_loops: int = 0
+    symbol_obfuscation: SymbolObfuscationConfiguration = field(default_factory=SymbolObfuscationConfiguration)
 
 
 @dataclass

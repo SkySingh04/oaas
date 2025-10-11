@@ -20,7 +20,7 @@ from core import (
     compare_binaries,
 )
 from core.batch import load_batch_config
-from core.config import AdvancedConfiguration, OutputConfiguration
+from core.config import AdvancedConfiguration, OutputConfiguration, SymbolObfuscationConfiguration
 from core.exceptions import ObfuscationError
 from core.utils import create_logger, load_yaml
 
@@ -40,6 +40,11 @@ def _build_config(
     cycles: int,
     string_encryption: bool,
     fake_loops: int,
+    enable_symbol_obfuscation: bool,
+    symbol_algorithm: str,
+    symbol_hash_length: int,
+    symbol_prefix: str,
+    symbol_salt: Optional[str],
     report_formats: str,
     custom_flags: Optional[str],
     config_file: Optional[Path],
@@ -59,10 +64,18 @@ def _build_config(
         bogus_control_flow=enable_bogus_cf,
         split=enable_split,
     )
+    symbol_obf_config = SymbolObfuscationConfiguration(
+        enabled=enable_symbol_obfuscation,
+        algorithm=symbol_algorithm,
+        hash_length=symbol_hash_length,
+        prefix_style=symbol_prefix,
+        salt=symbol_salt,
+    )
     advanced = AdvancedConfiguration(
         cycles=cycles,
         string_encryption=string_encryption,
         fake_loops=fake_loops,
+        symbol_obfuscation=symbol_obf_config,
     )
     output_config = OutputConfiguration(directory=output, report_formats=report_formats.split(","))
     return ObfuscationConfig(
@@ -89,6 +102,11 @@ def compile(
     cycles: int = typer.Option(1, help="Number of obfuscation cycles"),
     string_encryption: bool = typer.Option(False, "--string-encryption", help="Enable string encryption"),
     fake_loops: int = typer.Option(0, "--fake-loops", help="Number of fake loops to insert"),
+    enable_symbol_obfuscation: bool = typer.Option(False, "--enable-symbol-obfuscation", help="Enable cryptographic symbol renaming"),
+    symbol_algorithm: str = typer.Option("sha256", help="Symbol hash algorithm (sha256, blake2b, siphash)"),
+    symbol_hash_length: int = typer.Option(12, help="Symbol hash length"),
+    symbol_prefix: str = typer.Option("typed", help="Symbol prefix style (none, typed, underscore)"),
+    symbol_salt: Optional[str] = typer.Option(None, help="Custom salt for symbol hashing"),
     report_formats: str = typer.Option("json", help="Report formats (comma separated)"),
     custom_flags: Optional[str] = typer.Option(None, help="Additional compiler flags"),
     config_file: Optional[Path] = typer.Option(None, help="Load configuration from YAML/JSON file"),
@@ -108,6 +126,11 @@ def compile(
             cycles=cycles,
             string_encryption=string_encryption,
             fake_loops=fake_loops,
+            enable_symbol_obfuscation=enable_symbol_obfuscation,
+            symbol_algorithm=symbol_algorithm,
+            symbol_hash_length=symbol_hash_length,
+            symbol_prefix=symbol_prefix,
+            symbol_salt=symbol_salt,
             report_formats=report_formats,
             custom_flags=custom_flags,
             config_file=config_file,

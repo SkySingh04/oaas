@@ -19,7 +19,7 @@ from core import (
     analyze_binary,
 )
 from core.comparer import CompareConfig, compare_binaries
-from core.config import AdvancedConfiguration, PassConfiguration
+from core.config import AdvancedConfiguration, PassConfiguration, SymbolObfuscationConfiguration
 from core.exceptions import JobNotFoundError, ValidationError
 from core.job_manager import JobManager
 from core.progress import ProgressEvent, ProgressTracker
@@ -62,12 +62,21 @@ class PassesModel(BaseModel):
     split: bool = False
 
 
+class SymbolObfuscationModel(BaseModel):
+    enabled: bool = False
+    algorithm: str = Field("sha256", pattern="^(sha256|blake2b|siphash)$")
+    hash_length: int = Field(12, ge=8, le=32)
+    prefix_style: str = Field("typed", pattern="^(none|typed|underscore)$")
+    salt: Optional[str] = None
+
+
 class ConfigModel(BaseModel):
     level: int = Field(3, ge=1, le=5)
     passes: PassesModel = PassesModel()
     cycles: int = Field(1, ge=1, le=5)
     string_encryption: bool = False
     fake_loops: int = Field(0, ge=0, le=50)
+    symbol_obfuscation: SymbolObfuscationModel = SymbolObfuscationModel()
 
 
 class ObfuscateRequest(BaseModel):
@@ -139,10 +148,18 @@ def _build_config_from_request(payload: ObfuscateRequest, destination_dir: Path)
         bogus_control_flow=payload.config.passes.bogus_control_flow,
         split=payload.config.passes.split,
     )
+    symbol_obf = SymbolObfuscationConfiguration(
+        enabled=payload.config.symbol_obfuscation.enabled,
+        algorithm=payload.config.symbol_obfuscation.algorithm,
+        hash_length=payload.config.symbol_obfuscation.hash_length,
+        prefix_style=payload.config.symbol_obfuscation.prefix_style,
+        salt=payload.config.symbol_obfuscation.salt,
+    )
     advanced = AdvancedConfiguration(
         cycles=payload.config.cycles,
         string_encryption=payload.config.string_encryption,
         fake_loops=payload.config.fake_loops,
+        symbol_obfuscation=symbol_obf,
     )
     output_config = ObfuscationConfig.from_dict(
         {
@@ -158,6 +175,13 @@ def _build_config_from_request(payload: ObfuscateRequest, destination_dir: Path)
                 "cycles": advanced.cycles,
                 "string_encryption": advanced.string_encryption,
                 "fake_loops": advanced.fake_loops,
+                "symbol_obfuscation": {
+                    "enabled": symbol_obf.enabled,
+                    "algorithm": symbol_obf.algorithm,
+                    "hash_length": symbol_obf.hash_length,
+                    "prefix_style": symbol_obf.prefix_style,
+                    "salt": symbol_obf.salt,
+                },
             },
             "output": {
                 "directory": str(destination_dir),
