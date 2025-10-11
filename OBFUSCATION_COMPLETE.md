@@ -1148,6 +1148,225 @@ echo "✅ All binaries passed secret hiding test"
 **Severity:** 📋 **MEDIUM**
 **Problem:** No quantitative entropy metrics
 
+---
+
+### 🔧 CLI STATUS & INTEGRATION TODOS (Added 2025-10-11)
+
+#### ✅ What's Working via CLI
+
+**Layer 0: Symbol Obfuscation**
+- ✅ `--enable-symbol-obfuscation` fully functional
+- ✅ Achieves 1 symbol (down from 10+)
+- ✅ SHA256/BLAKE2B/SipHash algorithms working
+- ✅ Symbol map generation working
+
+**Layer 1: Compiler Flags**
+- ✅ 9 optimal flags automatically applied
+- ✅ 82.5/100 obfuscation score achieved
+- ✅ `-flto -fvisibility=hidden -O3 -fno-builtin` etc. working
+
+**Layer 3: String Encryption**
+- ✅ `--string-encryption` fully functional
+- ✅ XOR encryption with static constructor pattern
+- ✅ 100% secret hiding verified (strings command)
+- ✅ Handles const global declarations properly
+- ✅ Zero impact on functionality
+- ✅ **FIX COMPLETED 2025-10-11:** Was stub, now fully working
+
+**Infrastructure:**
+- ✅ JSON/HTML/Markdown report generation
+- ✅ Path handling fixed (absolute paths)
+- ✅ Dependencies updated (typer 0.12.5, click 8.1.7)
+
+#### ❌ What's NOT Working via CLI
+
+**Layer 2: OLLVM Passes - CRITICAL BLOCKER**
+- ❌ `--enable-flattening` flag exists but doesn't work
+- ❌ `--enable-substitution` flag exists but doesn't work
+- ❌ `--enable-boguscf` flag exists but doesn't work
+- ❌ `--enable-split` flag exists but doesn't work
+- ❌ Error: `Unknown command line argument '-flattening'`
+
+**Root Cause:**
+- Plugin exists: `/Users/akashsingh/Desktop/llvm-project/build/lib/LLVMObfuscationPlugin.dylib`
+- CLI tries: `-Xclang -load -Xclang <plugin> -mllvm -flattening`
+- LLVM doesn't recognize pass names
+
+**Impact:** Cannot use Layer 2 via CLI, must use manual `opt` command
+
+#### 📋 TODO: OLLVM Integration (Priority 1 - BLOCKING)
+
+**Issue 7: Package OLLVM Plugin with CLI Tool**
+
+**Severity:** 🚨 **CRITICAL - BLOCKING TEAM DEMOS**
+**Problem:** OLLVM plugin not integrated with CLI compilation pipeline
+**Status:** 🔴 IN PROGRESS
+
+**Tasks:**
+- [ ] Research correct LLVM pass invocation method
+  - Current: `-mllvm -flattening` doesn't work
+  - Try: NewPM syntax `--passes=flattening`?
+  - Try: Separate `opt` command before clang?
+  - Try: Legacy PM syntax?
+
+- [ ] Determine if passes need registration
+  - Check: PassRegistry requirements
+  - Check: Plugin initialization code
+  - Reference: OLLVM original implementation
+
+- [ ] Test pass loading manually
+  ```bash
+  # Test 1: Can opt load the plugin?
+  opt -load /path/to/LLVMObfuscationPlugin.dylib -help
+
+  # Test 2: Can we run passes via opt?
+  clang -S -emit-llvm source.c -o source.ll
+  opt -load plugin.dylib -flattening source.ll -o obfuscated.bc
+  clang obfuscated.bc -o binary
+  ```
+
+- [ ] Integrate working method into CLI
+  - Option A: Two-stage compilation (clang → opt → clang)
+  - Option B: Fix plugin registration
+  - Option C: Bundle pre-built binaries with correct passes
+
+- [ ] Document OLLVM installation for CLI users
+  - Where to get plugin
+  - How to build from source
+  - Path configuration
+
+**Priority:** CRITICAL - Blocking full 4-layer demos
+**Effort:** 4-8 hours
+**Owner:** Needs immediate attention
+**Deadline:** Before team demo release
+
+---
+
+**Issue 8: Create Cross-Platform Demo Binaries**
+
+**Severity:** ⚠️ **HIGH - USER REQUEST**
+**Problem:** Need demo binaries for team (Windows + Linux)
+**Status:** 🟡 IN PROGRESS
+
+**Requirements:**
+- [ ] Create 200-line C demo (authentication system)
+  - Multiple functions
+  - Hardcoded secrets
+  - Real-world use case
+
+- [ ] Create 200-line C++ demo (license validation)
+  - Classes and templates
+  - Complex logic
+  - Hardcoded keys
+
+- [ ] Build for Linux
+  - [ ] C demo: `demo_auth_linux`
+  - [ ] C++ demo: `demo_license_linux`
+
+- [ ] Build for Windows
+  - [ ] C demo: `demo_auth_windows.exe`
+  - [ ] C++ demo: `demo_license_windows.exe`
+  - [ ] Use: `--platform=windows` flag
+
+- [ ] Apply all working layers
+  - [ ] Symbol obfuscation (`--enable-symbol-obfuscation`)
+  - [ ] Layer 1 flags (automatic)
+  - [ ] String encryption (`--string-encryption`)
+  - [ ] OLLVM passes (if fixed, otherwise skip)
+
+- [ ] Verify obfuscation effectiveness
+  - [ ] Run `strings` command - no secrets visible
+  - [ ] Run `nm` command - minimal symbols
+  - [ ] Test functionality - binaries work correctly
+
+- [ ] Create demo package
+  - [ ] Source code (original)
+  - [ ] Binaries (obfuscated)
+  - [ ] README with before/after comparison
+  - [ ] Verification instructions
+
+**Priority:** HIGH
+**Effort:** 2-3 hours
+**Owner:** In progress
+**Deadline:** Today
+
+---
+
+**Issue 9: Document CLI Limitations**
+
+**Severity:** 📋 **MEDIUM**
+**Problem:** CLAUDE.md doesn't mention OLLVM integration issues
+
+**Tasks:**
+- [ ] Update CLAUDE.md with CLI status
+  - What works: Layer 0, 1, 3
+  - What doesn't: Layer 2 (OLLVM)
+  - Workarounds: Manual opt command
+
+- [ ] Add troubleshooting section
+  - OLLVM pass errors
+  - Plugin not found errors
+  - Path configuration
+
+- [ ] Clarify preset limitations
+  - "Maximum" preset won't apply OLLVM yet
+  - "Ultimate" preset won't apply OLLVM yet
+  - Expected behavior vs current behavior
+
+**Priority:** MEDIUM
+**Effort:** 1 hour
+**Owner:** Documentation team
+
+---
+
+**Issue 10: Compare CLI vs Manual Testing Results**
+
+**Severity:** 📋 **MEDIUM**
+**Problem:** 42 manual tests done, need to verify CLI gives same results
+
+**Background:**
+- Manual testing: 42 configurations with opt + clang
+- Result: Layer 1 alone > OLLVM (1 symbol vs 28 symbols)
+- Need: Verify CLI produces same effectiveness
+
+**Tasks:**
+- [ ] Re-run test scenarios using CLI
+  - Test: Layer 1 only
+  - Test: Layer 1 + Symbol obfuscation
+  - Test: Layer 1 + String encryption
+  - Test: All working layers combined
+
+- [ ] Compare metrics
+  - Symbol count
+  - Function count
+  - Binary size
+  - Entropy
+  - Strings visibility
+
+- [ ] Document any differences
+  - If CLI worse: investigate why
+  - If CLI better: document improvements
+  - If same: confirm CLI is production-ready
+
+**Priority:** MEDIUM
+**Effort:** 3-4 hours
+**Owner:** QA/Testing
+
+---
+
+### 📊 Current Layer Status Summary
+
+| Layer | Name | CLI Status | Manual Status | Effectiveness | Overhead |
+|-------|------|------------|---------------|---------------|----------|
+| 0 | Symbol Obfuscation | ✅ Working | ✅ Working | 1 symbol | ~0% |
+| 1 | Compiler Flags | ✅ Working | ✅ Working | 82.5/100 | ~2% |
+| 2 | OLLVM Passes | ❌ Broken | ✅ Working | 63.9/100 | ~10% |
+| 3 | String Encryption | ✅ Working | ✅ Working | 100% hiding | ~0% |
+
+**Net Result:** CLI provides 3 of 4 layers, achieving 10-20x RE difficulty
+
+---
+
 **Fix:**
 ```python
 import math
