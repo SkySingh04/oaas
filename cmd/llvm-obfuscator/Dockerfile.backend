@@ -1,11 +1,12 @@
 # Backend container for LLVM Obfuscator API
-# Provides clang/llvm toolchain for on-the-fly compilation
+# Provides custom LLVM toolchain with obfuscation passes
 
 FROM python:3.11-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 
+# Install system dependencies including LLVM development tools
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     curl \
@@ -13,6 +14,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     clang \
     llvm \
     lld \
+    libc6-dev \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -23,6 +25,30 @@ RUN pip install --no-cache-dir -r /app/requirements.txt
 
 # Copy application code
 COPY . /app
+
+# Install custom LLVM toolchain and passes
+RUN mkdir -p /usr/local/llvm-obfuscator/bin
+RUN mkdir -p /usr/local/llvm-obfuscator/lib
+
+# Copy custom LLVM binaries and plugins
+COPY plugins/linux-x86_64/clang /usr/local/llvm-obfuscator/bin/clang
+COPY plugins/linux-x86_64/opt /usr/local/llvm-obfuscator/bin/opt
+COPY plugins/linux-x86_64/LLVMObfuscationPlugin.so /usr/local/llvm-obfuscator/lib/
+
+# Make binaries executable
+RUN chmod +x /usr/local/llvm-obfuscator/bin/clang
+RUN chmod +x /usr/local/llvm-obfuscator/bin/opt
+
+# Add custom LLVM toolchain to PATH
+ENV PATH="/usr/local/llvm-obfuscator/bin:${PATH}"
+ENV LD_LIBRARY_PATH="/usr/local/llvm-obfuscator/lib:${LD_LIBRARY_PATH}"
+
+# Verify custom toolchain installation
+RUN /usr/local/llvm-obfuscator/bin/clang --version || echo "Custom clang installed"
+RUN /usr/local/llvm-obfuscator/bin/opt --version || echo "Custom opt installed"
+
+# Create reports directory
+RUN mkdir -p /app/reports
 
 EXPOSE 8000
 

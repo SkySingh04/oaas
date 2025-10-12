@@ -1,0 +1,217 @@
+name: Deploy to SSH Server
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Deployment environment'
+        required: true
+        default: 'production'
+        type: choice
+        options:
+        - production
+        - staging
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    environment: ${{ github.event.inputs.environment || 'production' }}
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Log in to Container Registry
+      uses: docker/login-action@v3
+      with:
+        registry: ${{ env.REGISTRY }}
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Extract metadata
+      id: meta
+      uses: docker/metadata-action@v5
+      with:
+        images: |
+          ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/backend
+          ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/frontend
+        tags: |
+          type=ref,event=branch
+          type=semver,pattern={{version}}
+          type=raw,value=latest,enable={{is_default_branch}}
+
+    - name: Build and push backend image
+      uses: docker/build-push-action@v5
+      with:
+        context: ./cmd/llvm-obfuscator
+        file: ./cmd/llvm-obfuscator/Dockerfile.backend.multiarch
+        push: true
+        tags: ${{ steps.meta.outputs.tags }}
+        labels: ${{ steps.meta.outputs.labels }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+        platforms: linux/amd64
+
+    - name: Build and push frontend image
+      uses: docker/build-push-action@v5
+      with:
+        context: ./cmd/llvm-obfuscator/frontend
+        file: ./cmd/llvm-obfuscator/frontend/Dockerfile.frontend
+        push: true
+        tags: ${{ steps.meta.outputs.tags }}
+        labels: ${{ steps.meta.outputs.labels }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+        platforms: linux/amd64
+
+    - name: Deploy to SSH Server
+      uses: appleboy/ssh-action@v1.0.3
+      with:
+        host: ${{ secrets.SSH_HOST }}
+        username: ${{ secrets.SSH_USERNAME }}
+        key: ${{ secrets.SSH_PRIVATE_KEY }}
+        port: ${{ secrets.SSH_PORT || 22 }}
+        script: |
+          #!/bin/bash
+          set -e
+          
+          echo "🚀 Starting deployment on server..."
+          
+          # Set deployment variables
+          export REGISTRY="${{ env.REGISTRY }}"
+          export IMAGE_NAME="${{ env.IMAGE_NAME }}"
+          export BACKEND_IMAGE="${REGISTRY}/${IMAGE_NAME}/backend:latest"
+          export FRONTEND_IMAGE="${REGISTRY}/${IMAGE_NAME}/frontend:latest"
+          export DEPLOY_DIR="/opt/llvm-obfuscator"
+          
+          # Create deployment directory
+          sudo mkdir -p $DEPLOY_DIR
+          cd $DEPLOY_DIR
+          
+          # Login to GitHub Container Registry
+          echo "${{ secrets.GITHUB_TOKEN }}" | sudo docker login $REGISTRY -u ${{ github.actor }} --password-stdin
+          
+          # Pull latest images
+          echo "📦 Pulling latest images..."
+          sudo docker pull $BACKEND_IMAGE
+          sudo docker pull $FRONTEND_IMAGE
+          
+          # Create docker-compose.yml for production
+          sudo tee docker-compose.yml > /dev/null << EOF
+          version: "3.9"
+          
+          services:
+            backend:
+              image: $BACKEND_IMAGE
+              container_name: llvm-obfuscator-backend
+              environment:
+                - OBFUSCATOR_DISABLE_AUTH=false
+                - PYTHONDONTWRITEBYTECODE=1
+                - PYTHONUNBUFFERED=1
+              volumes:
+                - ./reports:/app/reports
+                - ./logs:/app/logs
+              expose:
+                - "8000"
+              restart: unless-stopped
+              healthcheck:
+                test: ["CMD", "curl", "-fsS", "http://localhost:8000/api/health"]
+                interval: 30s
+                timeout: 10s
+                retries: 3
+                start_period: 40s
+              networks:
+                - obfuscator-network
+          
+            frontend:
+              image: $FRONTEND_IMAGE
+              container_name: llvm-obfuscator-frontend
+              ports:
+                - "80:80"
+              depends_on:
+                backend:
+                  condition: service_healthy
+              restart: unless-stopped
+              healthcheck:
+                test: ["CMD", "curl", "-fsS", "http://localhost/"]
+                interval: 30s
+                timeout: 10s
+                retries: 3
+              networks:
+                - obfuscator-network
+          
+          networks:
+            obfuscator-network:
+              driver: bridge
+          
+          volumes:
+            reports:
+              driver: local
+            logs:
+              driver: local
+          EOF
+          
+          # Create necessary directories
+          sudo mkdir -p reports logs
+          
+          # Stop existing containers
+          echo "🛑 Stopping existing containers..."
+          sudo docker-compose down || true
+          
+          # Start new containers
+          echo "🚀 Starting new containers..."
+          sudo docker-compose up -d
+          
+          # Wait for services to be healthy
+          echo "⏳ Waiting for services to be healthy..."
+          sleep 30
+          
+          # Check health
+          echo "🔍 Checking service health..."
+          if curl -fsS http://localhost:8000/api/health > /dev/null 2>&1; then
+            echo "✅ Backend is healthy"
+          else
+            echo "❌ Backend health check failed"
+            exit 1
+          fi
+          
+          if curl -fsS http://localhost/ > /dev/null 2>&1; then
+            echo "✅ Frontend is healthy"
+          else
+            echo "❌ Frontend health check failed"
+            exit 1
+          fi
+          
+          # Clean up old images
+          echo "🧹 Cleaning up old images..."
+          sudo docker image prune -f
+          
+          echo "🎉 Deployment completed successfully!"
+          echo "📊 Service Status:"
+          sudo docker-compose ps
+          
+          echo "🌐 Application is available at:"
+          echo "   Frontend: http://${{ secrets.SSH_HOST }}"
+          echo "   Backend API: http://${{ secrets.SSH_HOST }}/api"
+
+    - name: Notify deployment success
+      if: success()
+      run: |
+        echo "✅ Deployment to ${{ secrets.SSH_HOST }} completed successfully!"
+        echo "🌐 Application URL: http://${{ secrets.SSH_HOST }}"
+
+    - name: Notify deployment failure
+      if: failure()
+      run: |
+        echo "❌ Deployment to ${{ secrets.SSH_HOST }} failed!"
+        echo "Please check the logs and server status."
+

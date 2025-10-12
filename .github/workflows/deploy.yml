@@ -8,61 +8,157 @@ jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
     env:
-      REGISTRY: ghcr.io
-      IMAGE_BACKEND: ghcr.io/${{ github.repository }}/pb-obfuscator-backend
-      IMAGE_FRONTEND: ghcr.io/${{ github.repository }}/pb-obfuscator-frontend
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      IMAGE_BACKEND: ${{ secrets.DOCKERHUB_USERNAME }}/llvm-obfuscator-backend
+      IMAGE_FRONTEND: ${{ secrets.DOCKERHUB_USERNAME }}/llvm-obfuscator-frontend
+    
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Log in to GitHub Container Registry
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Docker Hub
         uses: docker/login-action@v3
         with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Build backend image
-        run: |
-          docker build -f cmd/llvm-obfuscator/Dockerfile.backend -t $IMAGE_BACKEND:latest cmd/llvm-obfuscator
+      - name: Build and push backend image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./cmd/llvm-obfuscator
+          file: ./cmd/llvm-obfuscator/Dockerfile.backend.multiarch
+          push: true
+          tags: ${{ env.IMAGE_BACKEND }}:latest
+          platforms: linux/amd64
 
-      - name: Build frontend image
-        run: |
-          docker build -f cmd/llvm-obfuscator/frontend/Dockerfile.frontend -t $IMAGE_FRONTEND:latest cmd/llvm-obfuscator/frontend
+      - name: Build and push frontend image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./cmd/llvm-obfuscator/frontend
+          file: ./cmd/llvm-obfuscator/frontend/Dockerfile.frontend
+          push: true
+          tags: ${{ env.IMAGE_FRONTEND }}:latest
+          platforms: linux/amd64
 
-      - name: Push images
-        run: |
-          docker push $IMAGE_BACKEND:latest
-          docker push $IMAGE_FRONTEND:latest
-
-      - name: Deploy to PB server
+      - name: Deploy to server
         uses: appleboy/ssh-action@v1.0.3
         with:
-          host: ${{ secrets.PB_HOST }}
-          username: ${{ secrets.PB_USER }}
-          key: ${{ secrets.PB_SSH_KEY }}
-          script_stop: true
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USERNAME }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: ${{ secrets.SSH_PORT || 22 }}
           script: |
             set -e
-            mkdir -p ~/pb-obfuscator
-            cd ~/pb-obfuscator
+            echo "🚀 Deploying LLVM Obfuscator..."
+            
+            # Create llvm directory
+            mkdir -p ~/llvm
+            cd ~/llvm
+            
+            # Create docker-compose.yml
             cat > docker-compose.yml << 'EOF'
             version: "3.9"
+            
             services:
               backend:
-                image: ${{ env.IMAGE_BACKEND }}:latest
+                image: ${{ secrets.DOCKERHUB_USERNAME }}/llvm-obfuscator-backend:latest
+                container_name: llvm-obfuscator-backend
                 environment:
-                  - OBFUSCATOR_DISABLE_AUTH=true
-                ports:
-                  - "8000:8000"
+                  - OBFUSCATOR_DISABLE_AUTH=false
+                  - PYTHONDONTWRITEBYTECODE=1
+                  - PYTHONUNBUFFERED=1
+                volumes:
+                  - ./reports:/app/reports
+                  - ./logs:/app/logs
+                expose:
+                  - "8000"
+                restart: unless-stopped
+                healthcheck:
+                  test: ["CMD", "curl", "-fsS", "http://localhost:8000/api/health"]
+                  interval: 30s
+                  timeout: 10s
+                  retries: 3
+                  start_period: 40s
+                networks:
+                  - obfuscator-network
+            
               frontend:
-                image: ${{ env.IMAGE_FRONTEND }}:latest
+                image: ${{ secrets.DOCKERHUB_USERNAME }}/llvm-obfuscator-frontend:latest
+                container_name: llvm-obfuscator-frontend
                 ports:
                   - "80:80"
                 depends_on:
-                  - backend
+                  backend:
+                    condition: service_healthy
+                restart: unless-stopped
+                healthcheck:
+                  test: ["CMD", "curl", "-fsS", "http://localhost/"]
+                  interval: 30s
+                  timeout: 10s
+                  retries: 3
+                networks:
+                  - obfuscator-network
+            
+            networks:
+              obfuscator-network:
+                driver: bridge
+            
+            volumes:
+              reports:
+                driver: local
+              logs:
+                driver: local
             EOF
-            docker compose pull || true
-            docker compose up -d
+            
+            # Create necessary directories
+            mkdir -p reports logs
+            
+            # Pull latest images
+            echo "📦 Pulling latest images..."
+            docker pull ${{ secrets.DOCKERHUB_USERNAME }}/llvm-obfuscator-backend:latest
+            docker pull ${{ secrets.DOCKERHUB_USERNAME }}/llvm-obfuscator-frontend:latest
+            
+            # Stop existing containers
+            echo "🛑 Stopping existing containers..."
+            docker-compose down || true
+            
+            # Start new containers
+            echo "🚀 Starting new containers..."
+            docker-compose up -d
+            
+            # Wait for services to be healthy
+            echo "⏳ Waiting for services to be healthy..."
+            sleep 30
+            
+            # Check health
+            echo "🔍 Checking service health..."
+            if curl -fsS http://localhost:8000/api/health > /dev/null 2>&1; then
+              echo "✅ Backend is healthy"
+            else
+              echo "❌ Backend health check failed"
+              exit 1
+            fi
+            
+            if curl -fsS http://localhost/ > /dev/null 2>&1; then
+              echo "✅ Frontend is healthy"
+            else
+              echo "❌ Frontend health check failed"
+              exit 1
+            fi
+            
+            # Clean up old images
+            echo "🧹 Cleaning up old images..."
+            docker image prune -f
+            
+            echo "🎉 Deployment completed successfully!"
+            echo "📊 Service Status:"
+            docker-compose ps
+            
+            echo "🌐 Application is available at:"
+            echo "   Frontend: http://${{ secrets.SSH_HOST }}"
+            echo "   Backend API: http://${{ secrets.SSH_HOST }}/api"
 
 

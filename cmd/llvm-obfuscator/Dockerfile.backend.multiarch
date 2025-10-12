@@ -1,0 +1,78 @@
+# Multi-architecture backend container for LLVM Obfuscator API
+# Supports both x86_64 and ARM64 architectures
+
+FROM python:3.11-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+
+# Install system dependencies including LLVM development tools
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates \
+    curl \
+    build-essential \
+    clang \
+    llvm \
+    lld \
+    libc6-dev \
+    file \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Install Python dependencies
+COPY requirements.txt /app/requirements.txt
+RUN pip install --no-cache-dir -r /app/requirements.txt
+
+# Copy application code
+COPY . /app
+
+# Install custom LLVM toolchain and passes based on architecture
+RUN mkdir -p /usr/local/llvm-obfuscator/bin
+RUN mkdir -p /usr/local/llvm-obfuscator/lib
+
+# Detect architecture and copy appropriate binaries
+RUN ARCH=$(dpkg --print-architecture) && \
+    if [ "$ARCH" = "amd64" ]; then \
+        PLUGIN_DIR="linux-x86_64"; \
+    elif [ "$ARCH" = "arm64" ]; then \
+        PLUGIN_DIR="darwin-arm64"; \
+    else \
+        echo "Unsupported architecture: $ARCH" && exit 1; \
+    fi && \
+    echo "Installing for architecture: $ARCH using plugin directory: $PLUGIN_DIR" && \
+    if [ -f "plugins/$PLUGIN_DIR/clang" ]; then \
+        cp plugins/$PLUGIN_DIR/clang /usr/local/llvm-obfuscator/bin/clang; \
+        chmod +x /usr/local/llvm-obfuscator/bin/clang; \
+    fi && \
+    if [ -f "plugins/$PLUGIN_DIR/opt" ]; then \
+        cp plugins/$PLUGIN_DIR/opt /usr/local/llvm-obfuscator/bin/opt; \
+        chmod +x /usr/local/llvm-obfuscator/bin/opt; \
+    fi && \
+    if [ -f "plugins/$PLUGIN_DIR/LLVMObfuscationPlugin.so" ]; then \
+        cp plugins/$PLUGIN_DIR/LLVMObfuscationPlugin.so /usr/local/llvm-obfuscator/lib/; \
+    elif [ -f "plugins/$PLUGIN_DIR/LLVMObfuscationPlugin.dylib" ]; then \
+        cp plugins/$PLUGIN_DIR/LLVMObfuscationPlugin.dylib /usr/local/llvm-obfuscator/lib/; \
+    fi
+
+# Add custom LLVM toolchain to PATH
+ENV PATH="/usr/local/llvm-obfuscator/bin:${PATH}"
+ENV LD_LIBRARY_PATH="/usr/local/llvm-obfuscator/lib:${LD_LIBRARY_PATH}"
+
+# Verify custom toolchain installation
+RUN if [ -f "/usr/local/llvm-obfuscator/bin/clang" ]; then \
+        /usr/local/llvm-obfuscator/bin/clang --version || echo "Custom clang installed"; \
+    fi
+RUN if [ -f "/usr/local/llvm-obfuscator/bin/opt" ]; then \
+        /usr/local/llvm-obfuscator/bin/opt --version || echo "Custom opt installed"; \
+    fi
+
+# Create reports directory
+RUN mkdir -p /app/reports
+
+EXPOSE 8000
+
+HEALTHCHECK CMD curl -fsS http://localhost:8000/api/health || exit 1
+
+CMD ["uvicorn", "api.server:app", "--host", "0.0.0.0", "--port", "8000"]
+
