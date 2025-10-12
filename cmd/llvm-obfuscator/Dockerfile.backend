@@ -50,10 +50,10 @@ RUN /usr/local/llvm-obfuscator/bin/opt --version || echo "Custom opt installed"
 # Create reports directory
 RUN mkdir -p /app/reports
 
-EXPOSE 8000
+EXPOSE 7888
 
-HEALTHCHECK CMD curl -fsS http://localhost:8000/api/health || exit 1
+HEALTHCHECK CMD curl -fsS http://localhost:7888/api/health || exit 1
 
-CMD ["uvicorn", "api.server:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "api.server:app", "--host", "0.0.0.0", "--port", "7888"]
 
 
