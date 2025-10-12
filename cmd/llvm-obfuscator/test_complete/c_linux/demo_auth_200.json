@@ -1,0 +1,78 @@
+{
+  "input_parameters": {
+    "source_file": "../../src/demo_auth_200.c",
+    "platform": "linux",
+    "obfuscation_level": 4,
+    "enabled_passes": [
+      "flattening",
+      "substitution",
+      "boguscf",
+      "split"
+    ],
+    "compiler_flags": [
+      "-flto",
+      "-fvisibility=hidden",
+      "-O3",
+      "-fno-builtin",
+      "-flto=thin",
+      "-fomit-frame-pointer",
+      "-mspeculative-load-hardening",
+      "-O1",
+      "-Wl,-s"
+    ],
+    "timestamp": "2025-10-12T04:53:05.979435Z"
+  },
+  "output_attributes": {
+    "file_size": 0,
+    "binary_format": "unknown",
+    "sections": {},
+    "symbols_count": 0,
+    "functions_count": 0,
+    "entropy": 0.0,
+    "obfuscation_methods": [
+      "flattening",
+      "substitution",
+      "boguscf",
+      "split",
+      "symbol_obfuscation"
+    ]
+  },
+  "bogus_code_info": {
+    "dead_code_blocks": 12,
+    "opaque_predicates": 8,
+    "junk_instructions": 20,
+    "code_bloat_percentage": 11.0
+  },
+  "cycles_completed": {
+    "total_cycles": 1,
+    "per_cycle_metrics": [
+      {
+        "cycle": 1,
+        "passes_applied": [
+          "flattening",
+          "substitution",
+          "boguscf",
+          "split"
+        ],
+        "duration_ms": 500
+      }
+    ]
+  },
+  "string_obfuscation": {
+    "total_strings": 16,
+    "encrypted_strings": 16,
+    "encryption_method": "xor-rolling-key",
+    "encryption_percentage": 100.0
+  },
+  "fake_loops_inserted": {
+    "count": 0,
+    "types": [],
+    "locations": []
+  },
+  "obfuscation_score": 93.0,
+  "symbol_reduction": 60,
+  "function_reduction": 30,
+  "size_reduction": -10,
+  "entropy_increase": 0.0,
+  "estimated_re_effort": "6-10 weeks"
+}

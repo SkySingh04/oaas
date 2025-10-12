@@ -356,98 +356,98 @@ class LLVMObfuscator:
                 # Determine opt binary path
                 plugin_path_resolved = Path(plugin_path)
 
-            # FIRST: Check for bundled opt and clang in same directory as plugin
-            bundled_opt = plugin_path_resolved.parent / "opt"
-            bundled_clang = plugin_path_resolved.parent / "clang"
+                # FIRST: Check for bundled opt and clang in same directory as plugin
+                bundled_opt = plugin_path_resolved.parent / "opt"
+                bundled_clang = plugin_path_resolved.parent / "clang"
 
-            if bundled_opt.exists():
-                self.logger.info("Using bundled opt: %s", bundled_opt)
-                opt_binary = bundled_opt
+                if bundled_opt.exists():
+                    self.logger.info("Using bundled opt: %s", bundled_opt)
+                    opt_binary = bundled_opt
 
-                # Also use bundled clang if available (ensures LLVM 22 compatibility)
-                if bundled_clang.exists():
-                    self.logger.info("Using bundled clang from LLVM 22: %s", bundled_clang)
-                    compiler = str(bundled_clang)
+                    # Also use bundled clang if available (ensures LLVM 22 compatibility)
+                    if bundled_clang.exists():
+                        self.logger.info("Using bundled clang from LLVM 22: %s", bundled_clang)
+                        compiler = str(bundled_clang)
+                    else:
+                        self.logger.warning("Bundled clang not found, using system clang (may have version mismatch)")
+                # SECOND: Check if plugin is from LLVM build directory
+                elif "/llvm-project/build/lib/" in str(plugin_path_resolved):
+                    # Plugin is from LLVM build, try to find opt and clang in same build
+                    llvm_build_dir = plugin_path_resolved.parent.parent  # Go up from lib/ to build/
+                    opt_binary = llvm_build_dir / "bin" / "opt"
+                    llvm_clang = llvm_build_dir / "bin" / "clang"
+
+                    if opt_binary.exists():
+                        self.logger.info("Using opt from LLVM build: %s", opt_binary)
+
+                        # Also use clang from same build if available
+                        if llvm_clang.exists():
+                            self.logger.info("Using clang from LLVM build: %s", llvm_clang)
+                            compiler = str(llvm_clang)
+                    else:
+                        self.logger.error(
+                            "OLLVM passes require custom opt binary.\n"
+                            "The plugin is from LLVM build but opt not found.\n"
+                            f"Expected at: {opt_binary}"
+                        )
+                        raise ObfuscationError("Custom opt binary not found")
+                # THIRD: Try known system locations (will fail - stock LLVM doesn't have our passes)
                 else:
-                    self.logger.warning("Bundled clang not found, using system clang (may have version mismatch)")
-            # SECOND: Check if plugin is from LLVM build directory
-            elif "/llvm-project/build/lib/" in str(plugin_path_resolved):
-                # Plugin is from LLVM build, try to find opt and clang in same build
-                llvm_build_dir = plugin_path_resolved.parent.parent  # Go up from lib/ to build/
-                opt_binary = llvm_build_dir / "bin" / "opt"
-                llvm_clang = llvm_build_dir / "bin" / "clang"
-
-                if opt_binary.exists():
-                    self.logger.info("Using opt from LLVM build: %s", opt_binary)
-
-                    # Also use clang from same build if available
-                    if llvm_clang.exists():
-                        self.logger.info("Using clang from LLVM build: %s", llvm_clang)
-                        compiler = str(llvm_clang)
-                else:
-                    self.logger.error(
-                        "OLLVM passes require custom opt binary.\n"
-                        "The plugin is from LLVM build but opt not found.\n"
-                        f"Expected at: {opt_binary}"
+                    self.logger.warning(
+                        "Using bundled plugin without bundled opt.\n"
+                        "Note: Stock LLVM 'opt' does NOT include OLLVM passes.\n"
+                        "This will likely fail. Please bundle opt with plugin."
                     )
-                    raise ObfuscationError("Custom opt binary not found")
-            # THIRD: Try known system locations (will fail - stock LLVM doesn't have our passes)
-            else:
-                self.logger.warning(
-                    "Using bundled plugin without bundled opt.\n"
-                    "Note: Stock LLVM 'opt' does NOT include OLLVM passes.\n"
-                    "This will likely fail. Please bundle opt with plugin."
-                )
-                # Try to find opt in known locations
-                opt_paths = [
-                    Path("/Users/akashsingh/Desktop/llvm-project/build/bin/opt"),
-                    Path("/usr/local/bin/opt"),
-                    Path("/opt/homebrew/bin/opt"),
+                    # Try to find opt in known locations
+                    opt_paths = [
+                        Path("/Users/akashsingh/Desktop/llvm-project/build/bin/opt"),
+                        Path("/usr/local/bin/opt"),
+                        Path("/opt/homebrew/bin/opt"),
+                    ]
+
+                    opt_binary = None
+                    for opt_path in opt_paths:
+                        if opt_path.exists():
+                            opt_binary = opt_path
+                            self.logger.warning("Trying opt at: %s (may not have OLLVM passes)", opt_binary)
+                            break
+
+                    if not opt_binary:
+                        self.logger.error(
+                            "No opt binary found and plugin needs compatible opt.\n"
+                            "Stock system LLVM does NOT include OLLVM passes.\n"
+                            "Please ensure bundled opt is in plugins/<platform>/ directory."
+                        )
+                        raise ObfuscationError("Compatible opt binary not found")
+
+                # Build the passes pipeline
+                passes_pipeline = ",".join(enabled_passes)
+                opt_cmd = [
+                    str(opt_binary),
+                    "-load-pass-plugin=" + str(plugin_path),
+                    f"-passes={passes_pipeline}",
+                    str(ir_file),
+                    "-o", str(obfuscated_ir)
                 ]
 
-                opt_binary = None
-                for opt_path in opt_paths:
-                    if opt_path.exists():
-                        opt_binary = opt_path
-                        self.logger.warning("Trying opt at: %s (may not have OLLVM passes)", opt_binary)
-                        break
+                self.logger.info("Step 2/3: Applying OLLVM passes via opt")
+                run_command(opt_cmd, cwd=source_abs.parent)
 
-                if not opt_binary:
-                    self.logger.error(
-                        "No opt binary found and plugin needs compatible opt.\n"
-                        "Stock system LLVM does NOT include OLLVM passes.\n"
-                        "Please ensure bundled opt is in plugins/<platform>/ directory."
-                    )
-                    raise ObfuscationError("Compatible opt binary not found")
+                # Step 3: Compile obfuscated IR to binary
+                final_cmd = [compiler, str(obfuscated_ir), "-o", str(destination_abs)] + compiler_flags
+                if config.platform == Platform.WINDOWS:
+                    final_cmd.extend(["--target=x86_64-w64-mingw32"])
 
-            # Build the passes pipeline
-            passes_pipeline = ",".join(enabled_passes)
-            opt_cmd = [
-                str(opt_binary),
-                "-load-pass-plugin=" + str(plugin_path),
-                f"-passes={passes_pipeline}",
-                str(ir_file),
-                "-o", str(obfuscated_ir)
-            ]
+                self.logger.info("Step 3/3: Compiling obfuscated IR to binary")
+                run_command(final_cmd, cwd=source_abs.parent)
 
-            self.logger.info("Step 2/3: Applying OLLVM passes via opt")
-            run_command(opt_cmd, cwd=source_abs.parent)
+                # Cleanup temporary files
+                if ir_file.exists():
+                    ir_file.unlink()
+                if obfuscated_ir.exists():
+                    obfuscated_ir.unlink()
 
-            # Step 3: Compile obfuscated IR to binary
-            final_cmd = [compiler, str(obfuscated_ir), "-o", str(destination_abs)] + compiler_flags
-            if config.platform == Platform.WINDOWS:
-                final_cmd.extend(["--target=x86_64-w64-mingw32"])
-
-            self.logger.info("Step 3/3: Compiling obfuscated IR to binary")
-            run_command(final_cmd, cwd=source_abs.parent)
-
-            # Cleanup temporary files
-            if ir_file.exists():
-                ir_file.unlink()
-            if obfuscated_ir.exists():
-                obfuscated_ir.unlink()
-
-            self.logger.info("OLLVM obfuscation complete")
+                self.logger.info("OLLVM obfuscation complete")
 
         elif enabled_passes:
             # Log warning but continue without passes
