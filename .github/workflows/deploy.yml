@@ -2,12 +2,15 @@ name: Deploy to PB Server
 
 on:
   workflow_dispatch:
-  push:
+  workflow_run:
+    workflows: ["Build and Push to Docker Hub"]
+    types: [completed]
     branches: [ main ]
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
     
     steps:
       - name: Deploy to server
