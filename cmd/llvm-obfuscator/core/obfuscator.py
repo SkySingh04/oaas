@@ -278,8 +278,20 @@ class LLVMObfuscator:
         else:
             base_compiler = "clang"
 
-        # Check for bundled clang first (from LLVM 22)
+        # Check for bundled clang FIRST (from LLVM 22) - used for ALL compilations
         compiler = base_compiler  # default to system clang
+        bundled_clang_path = None
+
+        # Try to find bundled plugin directory for this platform
+        plugin_path = self._get_bundled_plugin_path(config.platform)
+        if plugin_path:
+            bundled_clang_path = plugin_path.parent / "clang"
+            if bundled_clang_path.exists():
+                self.logger.info("Using bundled clang from LLVM 22: %s", bundled_clang_path)
+                compiler = str(bundled_clang_path)
+            else:
+                self.logger.debug("Bundled clang not found at: %s", bundled_clang_path)
+                bundled_clang_path = None
 
         # If OLLVM passes are requested, use 3-step workflow: source -> IR -> obfuscated IR -> binary
         if enabled_passes:
@@ -468,12 +480,22 @@ class LLVMObfuscator:
                 ", ".join(enabled_passes)
             )
             command = [compiler, str(source_abs), "-o", str(destination_abs)] + compiler_flags
+
+            # If using bundled clang (LLVM 22), add resource-dir to find system headers
+            if bundled_clang_path and bundled_clang_path.exists():
+                command.extend(["-resource-dir", "/usr/lib/clang/19"])
+
             if config.platform == Platform.WINDOWS:
                 command.extend(["--target=x86_64-w64-mingw32"])
             run_command(command, cwd=source_abs.parent)
         else:
             # No OLLVM passes - standard compilation
             command = [compiler, str(source_abs), "-o", str(destination_abs)] + compiler_flags
+
+            # If using bundled clang (LLVM 22), add resource-dir to find system headers
+            if bundled_clang_path and bundled_clang_path.exists():
+                command.extend(["-resource-dir", "/usr/lib/clang/19"])
+
             if config.platform == Platform.WINDOWS:
                 command.extend(["--target=x86_64-w64-mingw32"])
             run_command(command, cwd=source_abs.parent)
