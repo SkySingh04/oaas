@@ -31,14 +31,11 @@ class LLVMObfuscator:
     """Main obfuscation pipeline orchestrator."""
 
     BASE_FLAGS = [
-        "-flto",
         "-fvisibility=hidden",
         "-O3",
         "-fno-builtin",
-        "-flto=thin",
         "-fomit-frame-pointer",
         "-mspeculative-load-hardening",
-        "-O1",
         "-Wl,-s",
     ]
 
