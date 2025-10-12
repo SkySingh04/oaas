@@ -50,6 +50,9 @@ jobs:
           username: ${{ secrets.SSH_USERNAME }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: ${{ secrets.SSH_PORT || 22 }}
+          debug: true
+          timeout: 60s
+          command_timeout: 300s
           script: |
             set -e
             echo "🚀 Deploying LLVM Obfuscator..."
