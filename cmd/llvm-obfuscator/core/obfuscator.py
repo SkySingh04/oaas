@@ -340,6 +340,13 @@ class LLVMObfuscator:
             if enabled_passes:  # Re-check after potential cross-compilation skip
                 self.logger.info("Using opt-based workflow for OLLVM passes: %s", ", ".join(enabled_passes))
 
+                # Determine opt and clang binary paths early
+                plugin_path_resolved = Path(plugin_path)
+
+                # FIRST: Check for bundled opt and clang in same directory as plugin
+                bundled_opt = plugin_path_resolved.parent / "opt"
+                bundled_clang = plugin_path_resolved.parent / "clang"
+
                 # Step 1: Compile source to LLVM IR
                 ir_file = destination_abs.parent / f"{destination_abs.stem}_temp.ll"
                 ir_cmd = [compiler, str(source_abs), "-S", "-emit-llvm", "-o", str(ir_file)]
@@ -358,13 +365,6 @@ class LLVMObfuscator:
 
                 # Step 2: Apply OLLVM passes using opt
                 obfuscated_ir = destination_abs.parent / f"{destination_abs.stem}_obfuscated.bc"
-
-                # Determine opt binary path
-                plugin_path_resolved = Path(plugin_path)
-
-                # FIRST: Check for bundled opt and clang in same directory as plugin
-                bundled_opt = plugin_path_resolved.parent / "opt"
-                bundled_clang = plugin_path_resolved.parent / "clang"
 
                 if bundled_opt.exists():
                     self.logger.info("Using bundled opt: %s", bundled_opt)
