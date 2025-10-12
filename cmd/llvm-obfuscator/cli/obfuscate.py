@@ -37,6 +37,7 @@ def _build_config(
     enable_substitution: bool,
     enable_bogus_cf: bool,
     enable_split: bool,
+    enable_linear_mba: bool,
     cycles: int,
     string_encryption: bool,
     fake_loops: int,
@@ -55,7 +56,7 @@ def _build_config(
         return ObfuscationConfig.from_dict(data.get("obfuscation", data))
 
     flags = []
-    detected_passes = {"flattening": False, "substitution": False, "boguscf": False, "split": False}
+    detected_passes = {"flattening": False, "substitution": False, "boguscf": False, "split": False, "linear-mba": False}
     if custom_flags:
         raw_flags = [flag.strip() for flag in custom_flags.split(" ") if flag.strip()]
         flags, detected_passes = normalize_flags_and_passes(raw_flags)
@@ -65,6 +66,7 @@ def _build_config(
         substitution=enable_substitution or detected_passes.get("substitution", False),
         bogus_control_flow=enable_bogus_cf or detected_passes.get("boguscf", False),
         split=enable_split or detected_passes.get("split", False),
+        linear_mba=enable_linear_mba or detected_passes.get("linear-mba", False),
     )
     symbol_obf_config = SymbolObfuscationConfiguration(
         enabled=enable_symbol_obfuscation,
@@ -101,6 +103,7 @@ def compile(
     enable_substitution: bool = typer.Option(False, "--enable-substitution", help="Enable instruction substitution"),
     enable_bogus_cf: bool = typer.Option(False, "--enable-bogus-cf", help="Enable bogus control flow"),
     enable_split: bool = typer.Option(False, "--enable-split", help="Enable basic block splitting"),
+    enable_linear_mba: bool = typer.Option(False, "--enable-linear-mba", help="Enable Linear MBA bitwise obfuscation"),
     cycles: int = typer.Option(1, help="Number of obfuscation cycles"),
     string_encryption: bool = typer.Option(False, "--string-encryption", help="Enable string encryption"),
     fake_loops: int = typer.Option(0, "--fake-loops", help="Number of fake loops to insert"),
@@ -125,6 +128,7 @@ def compile(
             enable_substitution=enable_substitution,
             enable_bogus_cf=enable_bogus_cf,
             enable_split=enable_split,
+            enable_linear_mba=enable_linear_mba,
             cycles=cycles,
             string_encryption=string_encryption,
             fake_loops=fake_loops,

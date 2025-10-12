@@ -33,6 +33,7 @@ class PassConfiguration:
     substitution: bool = False
     bogus_control_flow: bool = False
     split: bool = False
+    linear_mba: bool = False
 
     def enabled_passes(self) -> List[str]:
         mapping = {
@@ -40,6 +41,7 @@ class PassConfiguration:
             "substitution": self.substitution,
             "boguscf": self.bogus_control_flow,
             "split": self.split,  # Note: New PM uses "split", legacy uses "splitbbl"
+            "linear-mba": self.linear_mba,
         }
         return [name for name, enabled in mapping.items() if enabled]
 
@@ -90,6 +92,7 @@ class ObfuscationConfig:
             substitution=passes_data.get("substitution", False),
             bogus_control_flow=passes_data.get("bogus_control_flow", False),
             split=passes_data.get("split", False),
+            linear_mba=passes_data.get("linear_mba", False),
         )
         adv_data = data.get("advanced", {})
         advanced = AdvancedConfiguration(
