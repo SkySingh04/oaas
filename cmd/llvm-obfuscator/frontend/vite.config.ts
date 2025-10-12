@@ -24,6 +24,11 @@ export default defineConfig({
     port: 4666,
     host: '0.0.0.0',
     strictPort: true,
+    allowedHosts: [
+      'oaas.pointblank.club',
+      'localhost',
+      '127.0.0.1'
+    ],
     proxy: {
       '/api': {
         target: 'http://llvm-obfuscator-backend:8000',
