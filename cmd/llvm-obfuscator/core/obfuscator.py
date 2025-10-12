@@ -268,6 +268,66 @@ class LLVMObfuscator:
             return f"{stem}.exe"
         return stem
 
+    def _get_resource_dir_flag(self, compiler_path: str) -> List[str]:
+        """
+        Get the -resource-dir flag for custom clang binaries that don't have
+        their own resource directory (stddef.h, stdint.h, etc.).
+
+        This is needed when using bundled clang or custom-built clang that
+        doesn't have the compiler builtin headers.
+        """
+        import platform as py_platform
+        import subprocess
+
+        # Only needed on Linux for custom clang binaries
+        if py_platform.system().lower() != "linux":
+            return []
+
+        # Check if this is a custom clang (not system clang)
+        is_custom_clang = (
+            "/plugins/" in compiler_path or  # Bundled clang
+            "/usr/local/llvm-obfuscator/" in compiler_path or  # Custom installed clang
+            "/llvm-project/build/" in compiler_path  # LLVM build directory
+        )
+
+        if not is_custom_clang:
+            return []
+
+        # Try to find system clang's resource directory
+        # Priority: system clang-19 > clang-18 > clang
+        system_clang_candidates = [
+            "/usr/lib/llvm-19/lib/clang/19",
+            "/usr/lib/llvm-18/lib/clang/18",
+            "/usr/lib/llvm-17/lib/clang/17",
+        ]
+
+        for resource_dir in system_clang_candidates:
+            if Path(resource_dir).exists():
+                self.logger.debug(f"Using system resource directory for custom clang: {resource_dir}")
+                return ["-resource-dir", resource_dir]
+
+        # Fallback: try to detect from system clang
+        try:
+            result = subprocess.run(
+                ["clang", "-print-resource-dir"],
+                capture_output=True,
+                text=True,
+                timeout=5
+            )
+            if result.returncode == 0:
+                resource_dir = result.stdout.strip()
+                if Path(resource_dir).exists():
+                    self.logger.debug(f"Detected resource directory from system clang: {resource_dir}")
+                    return ["-resource-dir", resource_dir]
+        except Exception as e:
+            self.logger.debug(f"Could not detect system clang resource directory: {e}")
+
+        self.logger.warning(
+            "Custom clang binary used but system resource directory not found. "
+            "Compilation may fail with 'stddef.h not found' errors."
+        )
+        return []
+
     def _compile(
         self,
         source: Path,
@@ -389,6 +449,11 @@ class LLVMObfuscator:
                 ir_file = destination_abs.parent / f"{destination_abs.stem}_temp.ll"
                 ir_cmd = [compiler, str(source_abs), "-S", "-emit-llvm", "-o", str(ir_file)]
 
+                # Add resource-dir flag if using custom clang
+                resource_dir_flags = self._get_resource_dir_flag(compiler)
+                if resource_dir_flags:
+                    ir_cmd.extend(resource_dir_flags)
+
                 # Add platform target if Windows
                 if config.platform == Platform.WINDOWS:
                     ir_cmd.extend(["--target=x86_64-w64-mingw32"])
@@ -506,12 +571,22 @@ class LLVMObfuscator:
             )
             command = [compiler, str(source_abs), "-o", str(destination_abs)] + compiler_flags
 
+            # Add resource-dir flag if using custom clang
+            resource_dir_flags = self._get_resource_dir_flag(compiler)
+            if resource_dir_flags:
+                command.extend(resource_dir_flags)
+
             if config.platform == Platform.WINDOWS:
                 command.extend(["--target=x86_64-w64-mingw32"])
             run_command(command, cwd=source_abs.parent)
         else:
             # No OLLVM passes - standard compilation
             command = [compiler, str(source_abs), "-o", str(destination_abs)] + compiler_flags
+
+            # Add resource-dir flag if using custom clang
+            resource_dir_flags = self._get_resource_dir_flag(compiler)
+            if resource_dir_flags:
+                command.extend(resource_dir_flags)
 
             if config.platform == Platform.WINDOWS:
                 command.extend(["--target=x86_64-w64-mingw32"])
