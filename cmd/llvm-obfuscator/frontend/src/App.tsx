@@ -56,7 +56,7 @@ type LayerPreset = {
     general: {
       level: number;
       cycles: number;
-      targetPlatform: 'linux' | 'windows';
+      targetPlatform: 'linux' | 'windows' | 'macos';
     };
     vm: {
       enabled: boolean;
@@ -125,7 +125,8 @@ function App() {
   // General settings
   const [obfuscationLevel, setObfuscationLevel] = useState(3);
   const [cycles, setCycles] = useState(1);
-  const [targetPlatform, setTargetPlatform] = useState<'linux' | 'windows'>('linux');
+  const [targetPlatform, setTargetPlatform] = useState<'linux' | 'windows' | 'macos'>('linux');
+  const [detectedLanguage, setDetectedLanguage] = useState<'c' | 'cpp' | null>(null);
 
   const layer1Flags = useMemo(
     () => [
@@ -359,13 +360,50 @@ function App() {
   const intersectionObserver = useRef<IntersectionObserver | null>(null);
   const sectionRefs = useRef<Record<string, HTMLDivElement | null>>({} as Record<string, HTMLDivElement | null>);
 
+  // Auto-detect C vs C++ from filename or content
+  const detectLanguage = useCallback((filename: string, content?: string): 'c' | 'cpp' => {
+    // Check file extension first
+    const ext = filename.toLowerCase().split('.').pop();
+    if (ext === 'cpp' || ext === 'cc' || ext === 'cxx' || ext === 'c++') {
+      return 'cpp';
+    }
+    if (ext === 'c') {
+      return 'c';
+    }
+
+    // If no clear extension, try to detect from content
+    if (content) {
+      // C++ indicators
+      const cppIndicators = [
+        /\bclass\b/,
+        /\bnamespace\b/,
+        /\btemplate\s*</,
+        /\bstd::/,
+        /\b(public|private|protected):/,
+        /#include\s*<(iostream|string|vector|map|algorithm)>/,
+        /\bvirtual\b/,
+        /\boperator\s*\(/
+      ];
+
+      if (cppIndicators.some(regex => regex.test(content))) {
+        return 'cpp';
+      }
+    }
+
+    // Default to C
+    return 'c';
+  }, []);
+
   const onPick = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const nextFile = e.target.files?.[0] ?? null;
     setFile(nextFile);
     if (nextFile) {
       setInputMode('file');
+      const lang = detectLanguage(nextFile.name);
+      setDetectedLanguage(lang);
+      setToast(`Detected ${lang.toUpperCase()} source file`);
     }
-  }, []);
+  }, [detectLanguage]);
 
   const fileToBase64 = (f: File) =>
     new Promise<string>((resolve, reject) => {
@@ -410,6 +448,17 @@ function App() {
 
     try {
       const source_b64 = inputMode === 'file' ? await fileToBase64(file as File) : stringToBase64(pastedSource);
+
+      // Auto-detect language for pasted code
+      let filename: string;
+      if (inputMode === 'file') {
+        filename = (file as File).name;
+      } else {
+        const lang = detectLanguage('pasted_source', pastedSource);
+        setDetectedLanguage(lang);
+        filename = lang === 'cpp' ? 'pasted_source.cpp' : 'pasted_source.c';
+      }
+
       const tokens = Array.from(
         new Set(
           selectedFlags
@@ -420,7 +469,7 @@ function App() {
       );
       const payload = {
         source_code: source_b64,
-        filename: inputMode === 'file' ? (file as File).name : 'pasted_source.c',
+        filename: filename,
         config: {
           level: obfuscationLevel,
           passes: {
@@ -723,25 +772,39 @@ function App() {
                   </ToggleButtonGroup>
 
                   {inputMode === 'file' ? (
-                    <Stack direction="row" spacing={2} alignItems="center">
-                      <Button variant="contained" component="label">
-                        Select File
-                        <input hidden type="file" accept=".c,.cpp,.cc,.cxx,.txt" onChange={onPick} />
-                      </Button>
-                      <Typography variant="body2">
-                        {file ? file.name : 'No file selected'}
-                      </Typography>
+                    <Stack spacing={1}>
+                      <Stack direction="row" spacing={2} alignItems="center">
+                        <Button variant="contained" component="label">
+                          Select File
+                          <input hidden type="file" accept=".c,.cpp,.cc,.cxx,.txt" onChange={onPick} />
+                        </Button>
+                        <Typography variant="body2">
+                          {file ? file.name : 'No file selected'}
+                        </Typography>
+                      </Stack>
+                      {detectedLanguage && (
+                        <Alert severity="info" sx={{ py: 0.5 }}>
+                          Detected language: <strong>{detectedLanguage.toUpperCase()}</strong>
+                        </Alert>
+                      )}
                     </Stack>
                   ) : (
-                    <TextField
-                      label="Paste source code"
-                      placeholder="int secret() { return 42; }"
-                      value={pastedSource}
-                      onChange={(e) => setPastedSource(e.target.value)}
-                      multiline
-                      minRows={8}
-                      fullWidth
-                    />
+                    <Stack spacing={1}>
+                      <TextField
+                        label="Paste source code"
+                        placeholder="int secret() { return 42; }"
+                        value={pastedSource}
+                        onChange={(e) => setPastedSource(e.target.value)}
+                        multiline
+                        minRows={8}
+                        fullWidth
+                      />
+                      {pastedSource && detectedLanguage && (
+                        <Alert severity="info" sx={{ py: 0.5 }}>
+                          Detected language: <strong>{detectedLanguage.toUpperCase()}</strong> (will be compiled as {detectedLanguage === 'cpp' ? 'pasted_source.cpp' : 'pasted_source.c'})
+                        </Alert>
+                      )}
+                    </Stack>
                   )}
                 </>
               ))}
@@ -822,10 +885,11 @@ function App() {
                         <Select
                           value={targetPlatform}
                           label="Target Platform"
-                          onChange={(e) => setTargetPlatform(e.target.value as 'linux' | 'windows')}
+                          onChange={(e) => setTargetPlatform(e.target.value as 'linux' | 'windows' | 'macos')}
                         >
                           <MenuItem value="linux">Linux</MenuItem>
                           <MenuItem value="windows">Windows</MenuItem>
+                          <MenuItem value="macos">macOS</MenuItem>
                         </Select>
                       </FormControl>
                     </Grid>
