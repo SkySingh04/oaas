@@ -282,16 +282,26 @@ class LLVMObfuscator:
         compiler = base_compiler  # default to system clang
         bundled_clang_path = None
 
-        # Try to find bundled plugin directory for this platform
-        plugin_path = self._get_bundled_plugin_path(config.platform)
-        if plugin_path:
-            bundled_clang_path = plugin_path.parent / "clang"
-            if bundled_clang_path.exists():
-                self.logger.info("Using bundled clang from LLVM 22: %s", bundled_clang_path)
-                compiler = str(bundled_clang_path)
-            else:
-                self.logger.debug("Bundled clang not found at: %s", bundled_clang_path)
-                bundled_clang_path = None
+        # Only use bundled clang if we're compiling for the SAME platform we're running on
+        import platform as py_platform
+        current_os = py_platform.system().lower()
+        target_os = config.platform.value.lower()
+        if target_os == "macos":
+            target_os = "darwin"
+
+        # Only look for bundled clang if not cross-compiling
+        is_same_platform = (current_os == target_os)
+        if is_same_platform:
+            # Try to find bundled plugin directory for this platform
+            plugin_path = self._get_bundled_plugin_path(config.platform)
+            if plugin_path:
+                bundled_clang_path = plugin_path.parent / "clang"
+                if bundled_clang_path.exists():
+                    self.logger.info("Using bundled clang from LLVM 22: %s", bundled_clang_path)
+                    compiler = str(bundled_clang_path)
+                else:
+                    self.logger.debug("Bundled clang not found at: %s", bundled_clang_path)
+                    bundled_clang_path = None
 
         # If OLLVM passes are requested, use 3-step workflow: source -> IR -> obfuscated IR -> binary
         if enabled_passes:
