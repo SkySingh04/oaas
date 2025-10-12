@@ -343,6 +343,12 @@ class LLVMObfuscator:
                 # Step 1: Compile source to LLVM IR
                 ir_file = destination_abs.parent / f"{destination_abs.stem}_temp.ll"
                 ir_cmd = [compiler, str(source_abs), "-S", "-emit-llvm", "-o", str(ir_file)]
+
+                # If using bundled clang (LLVM 22), add resource-dir to find system headers
+                if str(compiler) == str(bundled_clang) and bundled_clang.exists():
+                    # Use system clang's resource directory for headers
+                    ir_cmd.extend(["-resource-dir", "/usr/lib/clang/19"])
+
                 # Add platform target if Windows
                 if config.platform == Platform.WINDOWS:
                     ir_cmd.extend(["--target=x86_64-w64-mingw32"])
@@ -435,6 +441,11 @@ class LLVMObfuscator:
 
                 # Step 3: Compile obfuscated IR to binary
                 final_cmd = [compiler, str(obfuscated_ir), "-o", str(destination_abs)] + compiler_flags
+
+                # If using bundled clang, add resource-dir
+                if str(compiler) == str(bundled_clang) and bundled_clang.exists():
+                    final_cmd.extend(["-resource-dir", "/usr/lib/clang/19"])
+
                 if config.platform == Platform.WINDOWS:
                     final_cmd.extend(["--target=x86_64-w64-mingw32"])
 
