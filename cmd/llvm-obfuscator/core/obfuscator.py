@@ -56,34 +56,56 @@ class LLVMObfuscator:
         self.fake_loop_generator = FakeLoopGenerator()
         self.symbol_obfuscator = SymbolObfuscator()
 
-    def _get_bundled_plugin_path(self) -> Optional[Path]:
-        """Auto-detect bundled OLLVM plugin for current platform."""
+    def _get_bundled_plugin_path(self, target_platform: Optional[Platform] = None) -> Optional[Path]:
+        """Auto-detect bundled OLLVM plugin for current or target platform."""
         try:
             import platform
             import os
 
-            system = platform.system().lower()  # darwin, linux, windows
-            machine = platform.machine().lower()  # arm64, x86_64, amd64
+            if target_platform:
+                # Use target platform specified by user (for cross-compilation)
+                if target_platform == Platform.LINUX:
+                    system = "linux"
+                    arch = "x86_64"  # Default to x86_64 for Linux
+                    ext = "so"
+                elif target_platform == Platform.WINDOWS:
+                    system = "windows"
+                    arch = "x86_64"
+                    ext = "dll"
+                elif target_platform in [Platform.MACOS, Platform.DARWIN]:
+                    system = "darwin"
+                    arch = platform.machine().lower()  # Use current arch (arm64 or x86_64)
+                    if arch == "aarch64":
+                        arch = "arm64"
+                    ext = "dylib"
+                else:
+                    # For unknown, fall back to current platform detection
+                    target_platform = None
 
-            # Normalize architecture names
-            if machine in ['x86_64', 'amd64']:
-                arch = 'x86_64'
-            elif machine in ['arm64', 'aarch64']:
-                arch = 'arm64'
-            else:
-                self.logger.debug(f"Unsupported architecture for bundled plugin: {machine}")
-                return None
+            if not target_platform:
+                # Auto-detect current platform
+                system = platform.system().lower()  # darwin, linux, windows
+                machine = platform.machine().lower()  # arm64, x86_64, amd64
 
-            # Determine plugin extension by platform
-            if system == "darwin":
-                ext = "dylib"
-            elif system == "linux":
-                ext = "so"
-            elif system == "windows":
-                ext = "dll"
-            else:
-                self.logger.debug(f"Unsupported platform for bundled plugin: {system}")
-                return None
+                # Normalize architecture names
+                if machine in ['x86_64', 'amd64']:
+                    arch = 'x86_64'
+                elif machine in ['arm64', 'aarch64']:
+                    arch = 'arm64'
+                else:
+                    self.logger.debug(f"Unsupported architecture for bundled plugin: {machine}")
+                    return None
+
+                # Determine plugin extension by platform
+                if system == "darwin":
+                    ext = "dylib"
+                elif system == "linux":
+                    ext = "so"
+                elif system == "windows":
+                    ext = "dll"
+                else:
+                    self.logger.debug(f"Unsupported platform for bundled plugin: {system}")
+                    return None
 
             # Build path to bundled plugin
             plugin_dir = Path(__file__).parent.parent / "plugins" / f"{system}-{arch}"
@@ -277,8 +299,8 @@ class LLVMObfuscator:
                         plugin_path = None
 
             if not plugin_path:
-                # Try bundled plugin
-                plugin_path = self._get_bundled_plugin_path()
+                # Try bundled plugin for target platform
+                plugin_path = self._get_bundled_plugin_path(config.platform)
 
             if not plugin_path or not plugin_path.exists():
                 self.logger.error(
@@ -292,23 +314,47 @@ class LLVMObfuscator:
                 raise ObfuscationError("OLLVM plugin not found")
 
         if enabled_passes and plugin_path:
-            self.logger.info("Using opt-based workflow for OLLVM passes: %s", ", ".join(enabled_passes))
+            # Check for cross-compilation
+            import platform as py_platform
+            current_os = py_platform.system().lower()
+            target_os = config.platform.value.lower()
+            # Normalize macos to darwin for comparison
+            if target_os == "macos":
+                target_os = "darwin"
+            is_cross_compiling = (current_os == "darwin" and target_os == "linux") or \
+                                 (current_os == "darwin" and target_os == "windows") or \
+                                 (current_os == "linux" and target_os == "darwin") or \
+                                 (current_os == "linux" and target_os == "windows") or \
+                                 (current_os == "windows" and target_os == "darwin") or \
+                                 (current_os == "windows" and target_os == "linux")
 
-            # Step 1: Compile source to LLVM IR
-            ir_file = destination_abs.parent / f"{destination_abs.stem}_temp.ll"
-            ir_cmd = [compiler, str(source_abs), "-S", "-emit-llvm", "-o", str(ir_file)]
-            # Add platform target if Windows
-            if config.platform == Platform.WINDOWS:
-                ir_cmd.extend(["--target=x86_64-w64-mingw32"])
+            if is_cross_compiling:
+                self.logger.warning(
+                    f"Cross-compilation detected: Building on {current_os} for {target_os}.\n"
+                    f"OLLVM passes require running opt binary for target platform.\n"
+                    f"OLLVM passes will be skipped. Applying other obfuscation layers only.\n"
+                    f"To enable OLLVM for cross-compilation, use Docker or build on target platform."
+                )
+                enabled_passes = []  # Skip OLLVM passes for cross-compilation
 
-            self.logger.info("Step 1/3: Compiling to LLVM IR")
-            run_command(ir_cmd, cwd=source_abs.parent)
+            if enabled_passes:  # Re-check after potential cross-compilation skip
+                self.logger.info("Using opt-based workflow for OLLVM passes: %s", ", ".join(enabled_passes))
 
-            # Step 2: Apply OLLVM passes using opt
-            obfuscated_ir = destination_abs.parent / f"{destination_abs.stem}_obfuscated.bc"
+                # Step 1: Compile source to LLVM IR
+                ir_file = destination_abs.parent / f"{destination_abs.stem}_temp.ll"
+                ir_cmd = [compiler, str(source_abs), "-S", "-emit-llvm", "-o", str(ir_file)]
+                # Add platform target if Windows
+                if config.platform == Platform.WINDOWS:
+                    ir_cmd.extend(["--target=x86_64-w64-mingw32"])
 
-            # Determine opt binary path
-            plugin_path_resolved = Path(plugin_path)
+                self.logger.info("Step 1/3: Compiling to LLVM IR")
+                run_command(ir_cmd, cwd=source_abs.parent)
+
+                # Step 2: Apply OLLVM passes using opt
+                obfuscated_ir = destination_abs.parent / f"{destination_abs.stem}_obfuscated.bc"
+
+                # Determine opt binary path
+                plugin_path_resolved = Path(plugin_path)
 
             # FIRST: Check for bundled opt and clang in same directory as plugin
             bundled_opt = plugin_path_resolved.parent / "opt"

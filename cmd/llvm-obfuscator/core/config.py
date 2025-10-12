@@ -9,10 +9,15 @@ from typing import Dict, List, Optional
 class Platform(str, Enum):
     LINUX = "linux"
     WINDOWS = "windows"
+    MACOS = "macos"
+    DARWIN = "darwin"  # Alias for macOS
 
     @classmethod
     def from_string(cls, value: str) -> "Platform":
         normalized = value.lower()
+        # Handle darwin as alias for macos
+        if normalized == "darwin":
+            normalized = "macos"
         try:
             return cls(normalized)
         except ValueError as exc:
