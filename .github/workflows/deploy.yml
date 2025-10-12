@@ -54,9 +54,7 @@ jobs:
             set -e
             echo "🚀 Deploying LLVM Obfuscator..."
             
-            # Create llvm directory
-            mkdir -p ~/llvm
-            cd ~/llvm
+            cd oaas/
             
             # Create docker-compose.yml
             cat > docker-compose.yml << 'EOF'
