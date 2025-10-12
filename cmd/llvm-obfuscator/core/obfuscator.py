@@ -283,12 +283,32 @@ class LLVMObfuscator:
         if py_platform.system().lower() != "linux":
             return []
 
+        # Resolve compiler to full path if it's just a command name (like "clang")
+        resolved_path = compiler_path
+        if "/" not in compiler_path:
+            try:
+                result = subprocess.run(
+                    ["which", compiler_path],
+                    capture_output=True,
+                    text=True,
+                    timeout=5
+                )
+                if result.returncode == 0:
+                    resolved_path = result.stdout.strip()
+                    self.logger.info(f"[RESOURCE-DIR-DEBUG] Resolved '{compiler_path}' to '{resolved_path}'")
+            except Exception as e:
+                self.logger.warning(f"[RESOURCE-DIR-DEBUG] Could not resolve compiler path: {e}")
+        else:
+            self.logger.info(f"[RESOURCE-DIR-DEBUG] Compiler path already resolved: {resolved_path}")
+
         # Check if this is a custom clang (not system clang)
         is_custom_clang = (
-            "/plugins/" in compiler_path or  # Bundled clang
-            "/usr/local/llvm-obfuscator/" in compiler_path or  # Custom installed clang
-            "/llvm-project/build/" in compiler_path  # LLVM build directory
+            "/plugins/" in resolved_path or  # Bundled clang
+            "/usr/local/llvm-obfuscator/" in resolved_path or  # Custom installed clang
+            "/llvm-project/build/" in resolved_path  # LLVM build directory
         )
+
+        self.logger.info(f"[RESOURCE-DIR-DEBUG] is_custom_clang={is_custom_clang} for path={resolved_path}")
 
         if not is_custom_clang:
             return []
@@ -303,7 +323,7 @@ class LLVMObfuscator:
 
         for resource_dir in system_clang_candidates:
             if Path(resource_dir).exists():
-                self.logger.debug(f"Using system resource directory for custom clang: {resource_dir}")
+                self.logger.info(f"[RESOURCE-DIR-DEBUG] Using system resource directory: {resource_dir}")
                 return ["-resource-dir", resource_dir]
 
         # Fallback: try to detect from system clang
