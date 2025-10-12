@@ -181,10 +181,23 @@ class LLVMObfuscator:
         enabled_passes = config.passes.enabled_passes()
         compiler_flags = merge_flags(self.BASE_FLAGS, config.compiler_flags)
 
+        # IMPORTANT: Cycles only make sense for source code recompilation
+        # Once we have a binary, we can't feed it back through the compiler
+        # So if OLLVM passes are enabled, limit to 1 cycle
+        effective_cycles = 1 if enabled_passes else config.advanced.cycles
+        if enabled_passes and config.advanced.cycles > 1:
+            self.logger.warning(
+                "Multiple cycles (%d) requested with OLLVM passes enabled. "
+                "Cycles only apply to source code compilation. "
+                "Running 1 cycle with all OLLVM passes instead.",
+                config.advanced.cycles
+            )
+
         intermediate_source = working_source  # Use symbol-obfuscated source if enabled
-        for cycle in range(1, config.advanced.cycles + 1):
-            self.logger.info("Starting cycle %s/%s", cycle, config.advanced.cycles)
-            intermediate_binary = output_binary if cycle == config.advanced.cycles else output_directory / f"{output_binary.stem}_cycle{cycle}{output_binary.suffix}"
+        for cycle in range(1, effective_cycles + 1):
+            self.logger.info("Starting cycle %s/%s", cycle, effective_cycles)
+            intermediate_binary = output_binary if cycle == effective_cycles else output_directory / f"{output_binary.stem}_cycle{cycle}{output_binary.suffix}"
+
             self._compile(
                 intermediate_source,
                 intermediate_binary,
@@ -376,11 +389,6 @@ class LLVMObfuscator:
                 ir_file = destination_abs.parent / f"{destination_abs.stem}_temp.ll"
                 ir_cmd = [compiler, str(source_abs), "-S", "-emit-llvm", "-o", str(ir_file)]
 
-                # If using bundled clang (LLVM 22), add resource-dir to find system headers
-                if str(compiler) == str(bundled_clang) and bundled_clang.exists():
-                    # Use system clang's resource directory for headers
-                    ir_cmd.extend(["-resource-dir", "/usr/lib/clang/19"])
-
                 # Add platform target if Windows
                 if config.platform == Platform.WINDOWS:
                     ir_cmd.extend(["--target=x86_64-w64-mingw32"])
@@ -465,11 +473,15 @@ class LLVMObfuscator:
                 run_command(opt_cmd, cwd=source_abs.parent)
 
                 # Step 3: Compile obfuscated IR to binary
-                final_cmd = [compiler, str(obfuscated_ir), "-o", str(destination_abs)] + compiler_flags
+                # If using bundled clang, strip LTO flags (bundled clang doesn't have LLVMgold.so)
+                final_flags = compiler_flags
+                if str(compiler) == str(bundled_clang):
+                    # Remove all LTO-related flags
+                    final_flags = [f for f in compiler_flags if 'lto' not in f.lower()]
+                    if len(final_flags) != len(compiler_flags):
+                        self.logger.info("Removed LTO flags (incompatible with bundled clang)")
 
-                # If using bundled clang, add resource-dir
-                if str(compiler) == str(bundled_clang) and bundled_clang.exists():
-                    final_cmd.extend(["-resource-dir", "/usr/lib/clang/19"])
+                final_cmd = [compiler, str(obfuscated_ir), "-o", str(destination_abs)] + final_flags
 
                 if config.platform == Platform.WINDOWS:
                     final_cmd.extend(["--target=x86_64-w64-mingw32"])
@@ -494,20 +506,12 @@ class LLVMObfuscator:
             )
             command = [compiler, str(source_abs), "-o", str(destination_abs)] + compiler_flags
 
-            # If using bundled clang (LLVM 22), add resource-dir to find system headers
-            if bundled_clang_path and bundled_clang_path.exists():
-                command.extend(["-resource-dir", "/usr/lib/clang/19"])
-
             if config.platform == Platform.WINDOWS:
                 command.extend(["--target=x86_64-w64-mingw32"])
             run_command(command, cwd=source_abs.parent)
         else:
             # No OLLVM passes - standard compilation
             command = [compiler, str(source_abs), "-o", str(destination_abs)] + compiler_flags
-
-            # If using bundled clang (LLVM 22), add resource-dir to find system headers
-            if bundled_clang_path and bundled_clang_path.exists():
-                command.extend(["-resource-dir", "/usr/lib/clang/19"])
 
             if config.platform == Platform.WINDOWS:
                 command.extend(["--target=x86_64-w64-mingw32"])
