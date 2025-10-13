@@ -602,7 +602,16 @@ class LLVMObfuscator:
                         compiler = str(bundled_clang)
                     else:
                         self.logger.warning("Bundled clang not found, using system clang (may have version mismatch)")
-                # SECOND: Check if plugin is from LLVM build directory
+                # SECOND: Check Docker installation path (production deployment)
+                elif Path("/usr/local/llvm-obfuscator/bin/opt").exists():
+                    opt_binary = Path("/usr/local/llvm-obfuscator/bin/opt")
+                    docker_clang = Path("/usr/local/llvm-obfuscator/bin/clang")
+                    self.logger.info("Using opt from Docker installation: %s", opt_binary)
+
+                    if docker_clang.exists():
+                        self.logger.info("Using clang from Docker installation: %s", docker_clang)
+                        compiler = str(docker_clang)
+                # THIRD: Check if plugin is from LLVM build directory
                 elif "/llvm-project/build/lib/" in str(plugin_path_resolved):
                     # Plugin is from LLVM build, try to find opt and clang in same build
                     llvm_build_dir = plugin_path_resolved.parent.parent  # Go up from lib/ to build/
@@ -623,7 +632,7 @@ class LLVMObfuscator:
                             f"Expected at: {opt_binary}"
                         )
                         raise ObfuscationError("Custom opt binary not found")
-                # THIRD: Try known system locations (will fail - stock LLVM doesn't have our passes)
+                # FOURTH: Try known system locations (will fail - stock LLVM doesn't have our passes)
                 else:
                     self.logger.warning(
                         "Using bundled plugin without bundled opt.\n"
