@@ -3,6 +3,197 @@ import './App.css';
 
 type Platform = 'linux' | 'windows' | 'macos';
 
+// Demo Programs
+const DEMO_PROGRAMS = {
+  'demo_auth_c': {
+    name: 'Authentication System (C)',
+    language: 'c' as const,
+    code: `#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+
+// Hardcoded credentials (anti-pattern for demo)
+const char* ADMIN_PASSWORD = "Admin@SecurePass2024!";
+const char* API_KEY = "sk_live_a1b2c3d4e5f6g7h8i9j0";
+const char* DB_CONNECTION = "postgresql://admin:dbpass123@db.internal:5432/prod";
+
+typedef struct {
+    char username[64];
+    char role[32];
+    int access_level;
+} User;
+
+int authenticate(const char* username, const char* password) {
+    printf("[AUTH] Checking credentials for: %s\\n", username);
+
+    if (strcmp(username, "admin") == 0 && strcmp(password, ADMIN_PASSWORD) == 0) {
+        printf("[AUTH] Admin access granted\\n");
+        return 1;
+    }
+
+    printf("[AUTH] Authentication failed\\n");
+    return 0;
+}
+
+User* create_user(const char* username, const char* role, int level) {
+    User* user = (User*)malloc(sizeof(User));
+    strncpy(user->username, username, 63);
+    strncpy(user->role, role, 31);
+    user->access_level = level;
+    return user;
+}
+
+void connect_database() {
+    printf("[DB] Connecting to: %s\\n", DB_CONNECTION);
+    printf("[DB] Connection established\\n");
+}
+
+int main(int argc, char** argv) {
+    printf("=== Authentication System v1.0 ===\\n\\n");
+
+    if (argc < 3) {
+        printf("Usage: %s <username> <password>\\n", argv[0]);
+        printf("Demo mode: Using admin credentials\\n\\n");
+        argv[1] = "admin";
+        argv[2] = (char*)ADMIN_PASSWORD;
+    }
+
+    const char* username = argv[1];
+    const char* password = argv[2];
+
+    if (authenticate(username, password)) {
+        printf("\\n[SUCCESS] Access granted\\n");
+        printf("[API] Using API key: %s\\n", API_KEY);
+
+        User* user = create_user(username, "Administrator", 10);
+        connect_database();
+
+        printf("\\n[USER] Profile loaded\\n");
+        printf("  Username: %s\\n", user->username);
+        printf("  Role: %s\\n", user->role);
+        printf("  Access Level: %d\\n", user->access_level);
+
+        free(user);
+        return 0;
+    }
+
+    printf("\\n[FAIL] Access denied\\n");
+    return 1;
+}
+`,
+  },
+  'demo_license_cpp': {
+    name: 'License Validator (C++)',
+    language: 'cpp' as const,
+    code: `#include <iostream>
+#include <string>
+#include <vector>
+#include <map>
+
+// Hardcoded secrets (anti-pattern for demo)
+const std::string MASTER_KEY = "ENTERPRISE-MASTER-2024-A1B2C3D4E5F6";
+const std::string RSA_KEY = "-----BEGIN RSA PRIVATE KEY-----\\nMIIE...";
+const std::string AES_KEY = "AES256_PROD_KEY_2024_DO_NOT_SHARE";
+const std::string ACTIVATION_SECRET = "activation_secret_xyz_2024";
+
+enum class LicenseType { TRIAL, STANDARD, PROFESSIONAL, ENTERPRISE };
+
+template<typename T>
+class SecureContainer {
+private:
+    std::vector<T> data;
+    std::string key;
+public:
+    SecureContainer(const std::string& k) : key(k) {
+        std::cout << "[SECURE] Container initialized\\n";
+    }
+    void add(const T& item) { data.push_back(item); }
+    size_t size() const { return data.size(); }
+};
+
+class License {
+protected:
+    std::string license_key;
+    std::string owner;
+    LicenseType type;
+    bool activated;
+public:
+    License(const std::string& key, const std::string& own, LicenseType t)
+        : license_key(key), owner(own), type(t), activated(false) {}
+
+    virtual bool validate() const {
+        std::cout << "[LICENSE] Validating: " << license_key << "\\n";
+        if (license_key == MASTER_KEY) {
+            std::cout << "[LICENSE] Master key detected\\n";
+            return true;
+        }
+        return activated;
+    }
+
+    void activate(const std::string& code) {
+        if (code == ACTIVATION_SECRET) {
+            activated = true;
+            std::cout << "[LICENSE] Activation successful\\n";
+        }
+    }
+
+    bool is_activated() const { return activated; }
+};
+
+class EnterpriseLicense : public License {
+private:
+    int max_users;
+    std::vector<std::string> features;
+public:
+    EnterpriseLicense(const std::string& key, const std::string& own, int users)
+        : License(key, own, LicenseType::ENTERPRISE), max_users(users) {
+        features = {"Analytics", "Support", "Cloud", "API"};
+    }
+
+    bool validate() const override {
+        if (!License::validate()) return false;
+        std::cout << "[ENTERPRISE] Max users: " << max_users << "\\n";
+        return true;
+    }
+};
+
+int main(int argc, char** argv) {
+    std::cout << "=== License Validator v2.0 ===\\n\\n";
+
+    std::string key = (argc >= 2) ? argv[1] : MASTER_KEY;
+    std::string code = (argc >= 3) ? argv[2] : ACTIVATION_SECRET;
+
+    EnterpriseLicense* license = new EnterpriseLicense(key, "Acme Corp", 100);
+    license->activate(code);
+
+    bool valid = license->validate();
+
+    if (valid && license->is_activated()) {
+        std::cout << "\\n[SUCCESS] License valid\\n";
+        std::cout << "[CRYPTO] AES Key: " << AES_KEY << "\\n";
+        delete license;
+        return 0;
+    }
+
+    std::cout << "\\n[FAIL] License invalid\\n";
+    delete license;
+    return 1;
+}
+`,
+  },
+  'simple_hello': {
+    name: 'Hello World (C)',
+    language: 'c' as const,
+    code: `#include <stdio.h>
+
+int main() {
+    printf("Hello, World!\\n");
+    return 0;
+}
+`,
+  }
+};
+
 interface ReportData {
   job_id: string;
   source_file: string;
@@ -70,6 +261,7 @@ function App() {
   const [file, setFile] = useState<File | null>(null);
   const [inputMode, setInputMode] = useState<'file' | 'paste'>('file');
   const [pastedSource, setPastedSource] = useState('');
+  const [selectedDemo, setSelectedDemo] = useState<string>('');
   const [jobId, setJobId] = useState<string | null>(null);
   const [downloadUrls, setDownloadUrls] = useState<Record<Platform, string | null>>({
     linux: null,
@@ -139,6 +331,23 @@ function App() {
       setDetectedLanguage(lang);
     }
   }, [detectLanguage]);
+
+  const onSelectDemo = useCallback((demoKey: string) => {
+    if (!demoKey) {
+      setSelectedDemo('');
+      setPastedSource('');
+      setDetectedLanguage(null);
+      return;
+    }
+
+    const demo = DEMO_PROGRAMS[demoKey as keyof typeof DEMO_PROGRAMS];
+    if (demo) {
+      setSelectedDemo(demoKey);
+      setPastedSource(demo.code);
+      setDetectedLanguage(demo.language);
+      setInputMode('paste');
+    }
+  }, []);
 
   // Count active obfuscation layers
   const countLayers = useCallback(() => {
@@ -497,6 +706,20 @@ function App() {
               PASTE
             </button>
           </div>
+
+          {inputMode === 'paste' && (
+            <div className="config-grid" style={{ marginBottom: '15px' }}>
+              <label>
+                Load Demo Program:
+                <select value={selectedDemo} onChange={(e) => onSelectDemo(e.target.value)}>
+                  <option value="">-- Select Demo --</option>
+                  {Object.entries(DEMO_PROGRAMS).map(([key, demo]) => (
+                    <option key={key} value={key}>{demo.name}</option>
+                  ))}
+                </select>
+              </label>
+            </div>
+          )}
 
           {inputMode === 'file' ? (
             <div className="file-input">
