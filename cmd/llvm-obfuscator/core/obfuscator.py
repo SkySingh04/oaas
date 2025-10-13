@@ -348,6 +348,27 @@ class LLVMObfuscator:
         )
         return []
 
+    def _has_exception_handling(self, ir_file: Path) -> bool:
+        """
+        Check if LLVM IR file contains C++ exception handling (invoke/landingpad).
+
+        Returns True if the IR uses exception handling, which is incompatible
+        with the OLLVM flattening pass.
+        """
+        try:
+            ir_content = ir_file.read_text(encoding='utf-8', errors='ignore')
+
+            # Check for invoke instructions (exception-aware function calls)
+            has_invoke = ' invoke ' in ir_content
+
+            # Check for landingpad instructions (exception handlers)
+            has_landingpad = ' landingpad ' in ir_content
+
+            return has_invoke or has_landingpad
+        except Exception as e:
+            self.logger.warning(f"Could not check for exception handling in IR: {e}")
+            return False
+
     def _compile(
         self,
         source: Path,
@@ -480,6 +501,41 @@ class LLVMObfuscator:
 
                 self.logger.info("Step 1/3: Compiling to LLVM IR")
                 run_command(ir_cmd, cwd=source_abs.parent)
+
+                # Check for C++ exception handling (incompatible with flattening)
+                if self._has_exception_handling(ir_file):
+                    if 'flattening' in enabled_passes:
+                        self.logger.warning(
+                            "C++ exception handling detected in IR. The flattening pass is incompatible with "
+                            "C++ exception handling (invoke/landingpad instructions) and will be disabled. "
+                            "Other passes (substitution, boguscf, split) will still be applied. "
+                            "This is a known limitation of OLLVM's control flow flattening."
+                        )
+                        enabled_passes = [p for p in enabled_passes if p != 'flattening']
+
+                        if not enabled_passes:
+                            self.logger.info("No compatible OLLVM passes remaining after removing flattening. "
+                                           "Compilation will continue with compiler flags and other obfuscation layers.")
+
+                # Only continue with OLLVM if we still have passes enabled
+                if not enabled_passes:
+                    # Fall back to standard compilation without OLLVM passes
+                    command = [compiler, str(source_abs), "-o", str(destination_abs)] + compiler_flags
+
+                    # Add resource-dir flag if using custom clang
+                    resource_dir_flags = self._get_resource_dir_flag(compiler)
+                    if resource_dir_flags:
+                        command.extend(resource_dir_flags)
+
+                    if config.platform == Platform.WINDOWS:
+                        command.extend(["--target=x86_64-w64-mingw32"])
+
+                    # Clean up the IR file we don't need anymore
+                    if ir_file.exists():
+                        ir_file.unlink()
+
+                    run_command(command, cwd=source_abs.parent)
+                    return  # Exit early since we're not using OLLVM passes
 
                 # Step 2: Apply OLLVM passes using opt
                 obfuscated_ir = destination_abs.parent / f"{destination_abs.stem}_obfuscated.bc"
