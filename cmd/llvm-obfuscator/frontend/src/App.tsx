@@ -549,6 +549,7 @@ function App() {
       const payload = {
         source_code: source_b64,
         filename: filename,
+        platform: targetPlatform,
         config: {
           level: obfuscationLevel,
           passes: {
@@ -558,7 +559,6 @@ function App() {
             split: layer3
           },
           cycles: cycles,
-          target_platform: targetPlatform,
           string_encryption: layer2,
           fake_loops: layer2 ? fakeLoops : 0,
           symbol_obfuscation: {
