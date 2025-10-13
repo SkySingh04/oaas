@@ -276,15 +276,23 @@ function App() {
 
       // Auto-fetch report
       if (data.report_url) {
-        const reportRes = await fetch(data.report_url);
-        if (reportRes.ok) {
-          const reportData = await reportRes.json();
-          setReport(reportData);
+        try {
+          const reportRes = await fetch(data.report_url);
+          if (reportRes.ok) {
+            const reportData = await reportRes.json();
+            console.log('[DEBUG] Report data received:', reportData);
+            setReport(reportData);
+          }
+        } catch (reportErr) {
+          console.error('[DEBUG] Failed to fetch report:', reportErr);
+          // Don't fail the whole operation if just report fetch fails
         }
       }
     } catch (err) {
+      console.error('[DEBUG] Obfuscation error:', err);
       setProgress(null);
-      setToast(`✗ Error: ${String(err)}`);
+      const errorMsg = err instanceof Error ? err.message : String(err);
+      setToast(`✗ Error: ${errorMsg}`);
       setTimeout(() => setToast(null), 5000);
     } finally {
       setLoading(false);
@@ -573,83 +581,95 @@ function App() {
               {/* Input Parameters */}
               <div className="report-block">
                 <h3>INPUT PARAMETERS</h3>
-                <div className="report-item">Source: {report.source_file}</div>
-                <div className="report-item">Platform: {report.platform}</div>
-                <div className="report-item">Level: {report.obfuscation_level}</div>
-                <div className="report-item">Timestamp: {report.timestamp}</div>
-                <div className="report-item">Compiler Flags: {report.compiler_flags.join(' ')}</div>
+                <div className="report-item">Source: {report.source_file || 'N/A'}</div>
+                <div className="report-item">Platform: {report.platform || 'N/A'}</div>
+                <div className="report-item">Level: {report.obfuscation_level ?? 'N/A'}</div>
+                <div className="report-item">Timestamp: {report.timestamp || 'N/A'}</div>
+                <div className="report-item">Compiler Flags: {report.compiler_flags?.join(' ') || 'None'}</div>
               </div>
 
               {/* Output Attributes */}
-              <div className="report-block">
-                <h3>OUTPUT ATTRIBUTES</h3>
-                <div className="report-item">Size: {(report.output_attributes.file_size / 1024).toFixed(2)} KB</div>
-                <div className="report-item">Format: {report.output_attributes.binary_format}</div>
-                <div className="report-item">Symbols: {report.output_attributes.symbols_count}</div>
-                <div className="report-item">Functions: {report.output_attributes.functions_count}</div>
-                <div className="report-item">Entropy: {report.output_attributes.entropy.toFixed(3)}</div>
-                <div className="report-item">Methods: {report.output_attributes.obfuscation_methods.join(', ')}</div>
-              </div>
+              {report.output_attributes && (
+                <div className="report-block">
+                  <h3>OUTPUT ATTRIBUTES</h3>
+                  <div className="report-item">Size: {report.output_attributes.file_size ? (report.output_attributes.file_size / 1024).toFixed(2) : '0'} KB</div>
+                  <div className="report-item">Format: {report.output_attributes.binary_format || 'Unknown'}</div>
+                  <div className="report-item">Symbols: {report.output_attributes.symbols_count ?? 0}</div>
+                  <div className="report-item">Functions: {report.output_attributes.functions_count ?? 0}</div>
+                  <div className="report-item">Entropy: {report.output_attributes.entropy?.toFixed(3) ?? 'N/A'}</div>
+                  <div className="report-item">Methods: {report.output_attributes.obfuscation_methods?.join(', ') || 'None'}</div>
+                </div>
+              )}
 
               {/* Bogus Code */}
-              <div className="report-block">
-                <h3>BOGUS CODE GENERATION</h3>
-                <div className="report-item">Dead Blocks: {report.bogus_code_info.dead_code_blocks}</div>
-                <div className="report-item">Opaque Predicates: {report.bogus_code_info.opaque_predicates}</div>
-                <div className="report-item">Junk Instructions: {report.bogus_code_info.junk_instructions}</div>
-                <div className="report-item">Code Bloat: {report.bogus_code_info.code_bloat_percentage}%</div>
-              </div>
+              {report.bogus_code_info && (
+                <div className="report-block">
+                  <h3>BOGUS CODE GENERATION</h3>
+                  <div className="report-item">Dead Blocks: {report.bogus_code_info.dead_code_blocks ?? 0}</div>
+                  <div className="report-item">Opaque Predicates: {report.bogus_code_info.opaque_predicates ?? 0}</div>
+                  <div className="report-item">Junk Instructions: {report.bogus_code_info.junk_instructions ?? 0}</div>
+                  <div className="report-item">Code Bloat: {report.bogus_code_info.code_bloat_percentage ?? 0}%</div>
+                </div>
+              )}
 
               {/* Cycles */}
-              <div className="report-block">
-                <h3>OBFUSCATION CYCLES</h3>
-                <div className="report-item">Total: {report.cycles_completed.total_cycles}</div>
-                {report.cycles_completed.per_cycle_metrics.map(cycle => (
-                  <div key={cycle.cycle} className="report-item">
-                    Cycle {cycle.cycle}: {cycle.passes_applied.join(', ')} ({cycle.duration_ms}ms)
-                  </div>
-                ))}
-              </div>
+              {report.cycles_completed && (
+                <div className="report-block">
+                  <h3>OBFUSCATION CYCLES</h3>
+                  <div className="report-item">Total: {report.cycles_completed.total_cycles ?? 0}</div>
+                  {report.cycles_completed.per_cycle_metrics?.map((cycle, idx) => (
+                    <div key={idx} className="report-item">
+                      Cycle {cycle.cycle}: {cycle.passes_applied?.join(', ') || 'N/A'} ({cycle.duration_ms ?? 0}ms)
+                    </div>
+                  ))}
+                </div>
+              )}
 
               {/* String Obfuscation */}
-              <div className="report-block">
-                <h3>STRING ENCRYPTION</h3>
-                <div className="report-item">Total Strings: {report.string_obfuscation.total_strings}</div>
-                <div className="report-item">Encrypted: {report.string_obfuscation.encrypted_strings}</div>
-                <div className="report-item">Method: {report.string_obfuscation.encryption_method}</div>
-                <div className="report-item">Rate: {report.string_obfuscation.encryption_percentage.toFixed(1)}%</div>
-              </div>
+              {report.string_obfuscation && (
+                <div className="report-block">
+                  <h3>STRING ENCRYPTION</h3>
+                  <div className="report-item">Total Strings: {report.string_obfuscation.total_strings ?? 0}</div>
+                  <div className="report-item">Encrypted: {report.string_obfuscation.encrypted_strings ?? 0}</div>
+                  <div className="report-item">Method: {report.string_obfuscation.encryption_method || 'None'}</div>
+                  <div className="report-item">Rate: {report.string_obfuscation.encryption_percentage?.toFixed(1) ?? '0.0'}%</div>
+                </div>
+              )}
 
               {/* Fake Loops */}
-              <div className="report-block">
-                <h3>FAKE LOOPS</h3>
-                <div className="report-item">Count: {report.fake_loops_inserted.count}</div>
-                {report.fake_loops_inserted.locations.length > 0 && (
-                  <div className="report-item">Locations: {report.fake_loops_inserted.locations.join(', ')}</div>
-                )}
-              </div>
+              {report.fake_loops_inserted && (
+                <div className="report-block">
+                  <h3>FAKE LOOPS</h3>
+                  <div className="report-item">Count: {report.fake_loops_inserted.count ?? 0}</div>
+                  {report.fake_loops_inserted.locations && report.fake_loops_inserted.locations.length > 0 && (
+                    <div className="report-item">Locations: {report.fake_loops_inserted.locations.join(', ')}</div>
+                  )}
+                </div>
+              )}
 
               {/* Symbol Obfuscation */}
-              <div className="report-block">
-                <h3>SYMBOL OBFUSCATION</h3>
-                <div className="report-item">Enabled: {report.symbol_obfuscation.enabled ? 'Yes' : 'No'}</div>
-                {report.symbol_obfuscation.enabled && report.symbol_obfuscation.symbols_obfuscated && (
-                  <>
-                    <div className="report-item">Symbols Renamed: {report.symbol_obfuscation.symbols_obfuscated}</div>
-                    <div className="report-item">Algorithm: {report.symbol_obfuscation.algorithm}</div>
-                  </>
-                )}
-              </div>
+              {report.symbol_obfuscation && (
+                <div className="report-block">
+                  <h3>SYMBOL OBFUSCATION</h3>
+                  <div className="report-item">Enabled: {report.symbol_obfuscation.enabled ? 'Yes' : 'No'}</div>
+                  {report.symbol_obfuscation.enabled && report.symbol_obfuscation.symbols_obfuscated && (
+                    <>
+                      <div className="report-item">Symbols Renamed: {report.symbol_obfuscation.symbols_obfuscated}</div>
+                      <div className="report-item">Algorithm: {report.symbol_obfuscation.algorithm || 'N/A'}</div>
+                    </>
+                  )}
+                </div>
+              )}
 
               {/* Metrics */}
               <div className="report-block">
                 <h3>EFFECTIVENESS METRICS</h3>
-                <div className="report-item">Obfuscation Score: {report.obfuscation_score}/100</div>
-                <div className="report-item">Symbol Reduction: {report.symbol_reduction}%</div>
-                <div className="report-item">Function Reduction: {report.function_reduction}%</div>
-                <div className="report-item">Size Change: {report.size_reduction > 0 ? '+' : ''}{report.size_reduction}%</div>
-                <div className="report-item">Entropy Increase: {report.entropy_increase}%</div>
-                <div className="report-item">Est. RE Effort: {report.estimated_re_effort}</div>
+                <div className="report-item">Obfuscation Score: {report.obfuscation_score ?? 0}/100</div>
+                <div className="report-item">Symbol Reduction: {report.symbol_reduction ?? 0}%</div>
+                <div className="report-item">Function Reduction: {report.function_reduction ?? 0}%</div>
+                <div className="report-item">Size Change: {(report.size_reduction ?? 0) > 0 ? '+' : ''}{report.size_reduction ?? 0}%</div>
+                <div className="report-item">Entropy Increase: {report.entropy_increase ?? 0}%</div>
+                <div className="report-item">Est. RE Effort: {report.estimated_re_effort || 'N/A'}</div>
               </div>
             </div>
           </section>
