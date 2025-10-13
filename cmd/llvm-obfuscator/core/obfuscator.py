@@ -608,9 +608,9 @@ class LLVMObfuscator:
                     docker_clang = Path("/usr/local/llvm-obfuscator/bin/clang")
                     self.logger.info("Using opt from Docker installation: %s", opt_binary)
 
-                    if docker_clang.exists():
-                        self.logger.info("Using clang from Docker installation: %s", docker_clang)
-                        compiler = str(docker_clang)
+                    # Note: Docker clang doesn't have LLVMgold.so, so we keep using system clang for final compilation
+                    # Only opt is needed from Docker installation for OLLVM passes
+                    self.logger.info("Using Docker opt for OLLVM passes, but keeping system clang for final compilation (Docker clang lacks LLVMgold.so for LTO)")
                 # THIRD: Check if plugin is from LLVM build directory
                 elif "/llvm-project/build/lib/" in str(plugin_path_resolved):
                     # Plugin is from LLVM build, try to find opt and clang in same build
