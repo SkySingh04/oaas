@@ -58,6 +58,12 @@ interface ReportData {
   estimated_re_effort: string;
 }
 
+interface Modal {
+  type: 'error' | 'warning' | 'success';
+  title: string;
+  message: string;
+}
+
 function App() {
   const [darkMode, setDarkMode] = useState(true);
   const [serverStatus, setServerStatus] = useState<'checking' | 'online' | 'offline'>('checking');
@@ -73,7 +79,7 @@ function App() {
   const [binaryName, setBinaryName] = useState<string | null>(null);
   const [report, setReport] = useState<ReportData | null>(null);
   const [loading, setLoading] = useState(false);
-  const [toast, setToast] = useState<string | null>(null);
+  const [modal, setModal] = useState<Modal | null>(null);
   const [progress, setProgress] = useState<{ message: string; percent: number } | null>(null);
   const [detectedLanguage, setDetectedLanguage] = useState<'c' | 'cpp' | null>(null);
 
@@ -131,10 +137,55 @@ function App() {
       setInputMode('file');
       const lang = detectLanguage(nextFile.name);
       setDetectedLanguage(lang);
-      setToast(`Detected ${lang.toUpperCase()} source file`);
-      setTimeout(() => setToast(null), 3000);
     }
   }, [detectLanguage]);
+
+  // Count active obfuscation layers
+  const countLayers = useCallback(() => {
+    let count = 0;
+    if (layer0) count++; // Symbol obfuscation
+    if (layer1) count++; // Compiler flags
+    if (layer2) count++; // OLLVM passes
+    if (layer3) count++; // String encryption + fake loops
+    if (layer4) count++; // VM obfuscation
+    return count;
+  }, [layer0, layer1, layer2, layer3, layer4]);
+
+  // Validate source code syntax
+  const validateCode = (code: string, language: 'c' | 'cpp'): { valid: boolean; error?: string } => {
+    if (!code || code.trim().length === 0) {
+      return { valid: false, error: 'Source code is empty' };
+    }
+
+    // Basic syntax checks
+    const hasMainFunction = /\bmain\s*\(/.test(code);
+    if (!hasMainFunction) {
+      return { valid: false, error: 'No main() function found. Invalid C/C++ program.' };
+    }
+
+    // Check for basic C/C++ structure
+    const hasInclude = /#include/.test(code);
+    const hasFunction = /\w+\s+\w+\s*\([^)]*\)\s*\{/.test(code);
+
+    if (!hasInclude && !hasFunction) {
+      return { valid: false, error: 'Invalid C/C++ syntax: missing includes or function definitions' };
+    }
+
+    // Check for balanced braces
+    const openBraces = (code.match(/\{/g) || []).length;
+    const closeBraces = (code.match(/\}/g) || []).length;
+    if (openBraces !== closeBraces) {
+      return { valid: false, error: `Syntax error: Unbalanced braces (${openBraces} opening, ${closeBraces} closing)` };
+    }
+
+    // Check for balanced parentheses in preprocessor directives
+    const includeLines = code.match(/#include\s*[<"][^>"]+[>"]/g);
+    if (code.includes('#include') && !includeLines) {
+      return { valid: false, error: 'Syntax error: Invalid #include directive' };
+    }
+
+    return { valid: true };
+  };
 
   const fileToBase64 = (f: File) =>
     new Promise<string>((resolve, reject) => {
@@ -180,14 +231,75 @@ function App() {
   };
 
   const onSubmit = useCallback(async () => {
+    // Validation: Check if source is provided
     if (inputMode === 'file' && !file) {
-      setToast('Choose a source file');
-      setTimeout(() => setToast(null), 3000);
+      setModal({
+        type: 'error',
+        title: 'No File Selected',
+        message: 'Please select a C or C++ source file to obfuscate.'
+      });
       return;
     }
+
     if (inputMode === 'paste' && pastedSource.trim().length === 0) {
-      setToast('Paste source code before submitting');
-      setTimeout(() => setToast(null), 3000);
+      setModal({
+        type: 'error',
+        title: 'Empty Source Code',
+        message: 'Please paste valid C/C++ source code before submitting.'
+      });
+      return;
+    }
+
+    // Validation: Check if at least one layer is selected
+    const layerCount = countLayers();
+    if (layerCount === 0) {
+      setModal({
+        type: 'warning',
+        title: 'No Obfuscation Layers Selected',
+        message: 'Please enable at least one obfuscation layer (Layer 0-4) before proceeding.'
+      });
+      return;
+    }
+
+    // Get source code for validation
+    let sourceCode: string;
+    let filename: string;
+    let language: 'c' | 'cpp';
+
+    try {
+      if (inputMode === 'file') {
+        sourceCode = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result as string);
+          reader.onerror = () => reject(new Error('Failed to read file'));
+          reader.readAsText(file as File);
+        });
+        filename = (file as File).name;
+        language = detectLanguage(filename, sourceCode);
+      } else {
+        sourceCode = pastedSource;
+        language = detectLanguage('pasted_source', pastedSource);
+        setDetectedLanguage(language);
+        filename = language === 'cpp' ? 'pasted_source.cpp' : 'pasted_source.c';
+      }
+
+      // Validate code syntax
+      const validation = validateCode(sourceCode, language);
+      if (!validation.valid) {
+        setModal({
+          type: 'error',
+          title: 'Invalid Source Code',
+          message: validation.error || 'The provided source code contains syntax errors.'
+        });
+        return;
+      }
+
+    } catch (err) {
+      setModal({
+        type: 'error',
+        title: 'File Read Error',
+        message: 'Failed to read the source file. Please try again.'
+      });
       return;
     }
 
@@ -200,15 +312,6 @@ function App() {
     try {
       setProgress({ message: inputMode === 'file' ? 'Uploading file...' : 'Encoding source...', percent: 10 });
       const source_b64 = inputMode === 'file' ? await fileToBase64(file as File) : stringToBase64(pastedSource);
-
-      let filename: string;
-      if (inputMode === 'file') {
-        filename = (file as File).name;
-      } else {
-        const lang = detectLanguage('pasted_source', pastedSource);
-        setDetectedLanguage(lang);
-        filename = lang === 'cpp' ? 'pasted_source.cpp' : 'pasted_source.c';
-      }
 
       // Build compiler flags based on layers
       const flags: string[] = [...selectedFlags];
@@ -262,6 +365,10 @@ function App() {
 
       setProgress({ message: 'Finalizing...', percent: 90 });
       const data = await res.json();
+
+      // Generate custom binary name based on layer count
+      const customBinaryName = `obfuscated_${layerCount}_layer`;
+
       setJobId(data.job_id);
       setDownloadUrls({
         [targetPlatform]: data.download_url,
@@ -269,10 +376,15 @@ function App() {
         windows: targetPlatform === 'windows' ? data.download_url : null,
         macos: targetPlatform === 'macos' ? data.download_url : null
       });
-      setBinaryName(data.binary_name);
+      setBinaryName(customBinaryName);
       setProgress({ message: 'Complete!', percent: 100 });
-      setToast(`✓ Obfuscation completed! Binary ready for download.`);
-      setTimeout(() => setToast(null), 5000);
+
+      // Show success modal
+      setModal({
+        type: 'success',
+        title: 'Obfuscation Complete',
+        message: `Successfully applied ${layerCount} layer${layerCount > 1 ? 's' : ''} of obfuscation. Binary ready for download.`
+      });
 
       // Auto-fetch report
       if (data.report_url) {
@@ -292,8 +404,22 @@ function App() {
       console.error('[DEBUG] Obfuscation error:', err);
       setProgress(null);
       const errorMsg = err instanceof Error ? err.message : String(err);
-      setToast(`✗ Error: ${errorMsg}`);
-      setTimeout(() => setToast(null), 5000);
+
+      // Parse error message for better user feedback
+      let userFriendlyError = errorMsg;
+      if (errorMsg.includes('syntax error') || errorMsg.includes('error:')) {
+        userFriendlyError = 'Compilation failed. Please check your source code for syntax errors.';
+      } else if (errorMsg.includes('timeout')) {
+        userFriendlyError = 'Obfuscation timed out. Try reducing the obfuscation level or file size.';
+      } else if (errorMsg.includes('network') || errorMsg.includes('fetch')) {
+        userFriendlyError = 'Network error. Please check your internet connection and try again.';
+      }
+
+      setModal({
+        type: 'error',
+        title: 'Obfuscation Failed',
+        message: userFriendlyError
+      });
     } finally {
       setLoading(false);
       setTimeout(() => setProgress(null), 2000);
@@ -301,7 +427,7 @@ function App() {
   }, [
     file, inputMode, pastedSource, selectedFlags, obfuscationLevel, cycles, targetPlatform,
     layer0, layer1, layer2, layer3, layer4, fakeLoops,
-    symbolAlgorithm, symbolHashLength, symbolPrefix, symbolSalt, detectLanguage
+    symbolAlgorithm, symbolHashLength, symbolPrefix, symbolSalt, detectLanguage, countLayers
   ]);
 
   const onDownloadBinary = useCallback((platform: Platform) => {
@@ -333,7 +459,25 @@ function App() {
         </div>
       </header>
 
-      {toast && <div className="toast">{toast}</div>}
+      {/* Modal */}
+      {modal && (
+        <div className="modal-overlay" onClick={() => setModal(null)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <div className={`modal-header ${modal.type}`}>
+              <h3>{modal.title}</h3>
+              <button className="modal-close" onClick={() => setModal(null)}>×</button>
+            </div>
+            <div className="modal-body">
+              <p>{modal.message}</p>
+            </div>
+            <div className="modal-footer">
+              <button className="modal-btn" onClick={() => setModal(null)}>
+                {modal.type === 'success' ? 'OK' : 'Close'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <main className="main-content">
         {/* Input Section */}
