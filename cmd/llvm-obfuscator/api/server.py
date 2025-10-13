@@ -77,6 +77,8 @@ def _find_default_plugin() -> Tuple[Optional[str], bool]:
         repo_root = Path(__file__).resolve().parent
     
     candidates = [
+        Path("/usr/local/llvm-obfuscator/lib/LLVMObfuscationPlugin.so"),            # Docker container
+        Path("/usr/local/llvm-obfuscator/lib/LLVMObfuscationPlugin.dylib"),          # Docker container macOS
         repo_root / "llvm-project" / "build" / "lib" / "LLVMObfuscationPlugin.dylib",  # macOS
         repo_root / "llvm-project" / "build" / "lib" / "LLVMObfuscationPlugin.so",     # Linux
         repo_root / "llvm-project" / "build" / "bin" / "LLVMObfuscationPlugin.dll",    # Windows
