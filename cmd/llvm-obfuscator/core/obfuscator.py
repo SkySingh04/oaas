@@ -127,6 +127,10 @@ class LLVMObfuscator:
         ensure_directory(output_directory)
         output_binary = output_directory / self._output_name(source_file, config.platform)
 
+        # Track warnings and important events for the report
+        warnings_log = []
+        actually_applied_passes = []
+
         require_tool("clang")
         if config.platform == Platform.WINDOWS:
             require_tool("x86_64-w64-mingw32-gcc")
@@ -198,13 +202,20 @@ class LLVMObfuscator:
             self.logger.info("Starting cycle %s/%s", cycle, effective_cycles)
             intermediate_binary = output_binary if cycle == effective_cycles else output_directory / f"{output_binary.stem}_cycle{cycle}{output_binary.suffix}"
 
-            self._compile(
+            cycle_result = self._compile(
                 intermediate_source,
                 intermediate_binary,
                 config,
                 compiler_flags,
                 enabled_passes,
             )
+
+            # Track what actually happened
+            if cycle_result:
+                actually_applied_passes = cycle_result.get("applied_passes", [])
+                # Always extend warnings list (even if empty, to maintain consistency)
+                warnings_log.extend(cycle_result.get("warnings", []))
+
             intermediate_source = intermediate_binary
 
         binary_format = detect_binary_format(output_binary)
@@ -225,12 +236,14 @@ class LLVMObfuscator:
 
         job_data = {
             "job_id": job_id,
-            "source_file": str(source_file),
+            "source_file": str(source_file.name),  # Use just the filename, not full path
             "platform": config.platform.value,
             "obfuscation_level": int(config.level),
-            "enabled_passes": enabled_passes,
+            "requested_passes": enabled_passes,  # What user requested
+            "applied_passes": actually_applied_passes,  # What was actually applied
             "compiler_flags": compiler_flags,
             "timestamp": get_timestamp(),
+            "warnings": warnings_log,  # Add warnings to report
             "output_attributes": {
                 "file_size": file_size,
                 "binary_format": binary_format,
@@ -238,7 +251,7 @@ class LLVMObfuscator:
                 "symbols_count": symbols_count,
                 "functions_count": functions_count,
                 "entropy": entropy,
-                "obfuscation_methods": enabled_passes + (["symbol_obfuscation"] if symbol_result else []),
+                "obfuscation_methods": actually_applied_passes + (["symbol_obfuscation"] if symbol_result else []) + (["string_encryption"] if string_result else []),
             },
             "bogus_code_info": base_metrics["bogus_code_info"],
             "cycles_completed": base_metrics["cycles_completed"],
@@ -376,10 +389,14 @@ class LLVMObfuscator:
         config: ObfuscationConfig,
         compiler_flags: List[str],
         enabled_passes: List[str],
-    ) -> None:
+    ) -> Dict:
         # Use absolute paths to avoid path resolution issues
         source_abs = source.resolve()
         destination_abs = destination.resolve()
+
+        # Track what actually happens during compilation
+        warnings = []
+        actually_applied_passes = list(enabled_passes)  # Start with requested passes
 
         # Detect compiler based on file extension
         if source_abs.suffix in ['.cpp', '.cxx', '.cc', '.c++']:
@@ -468,13 +485,29 @@ class LLVMObfuscator:
                                  (current_os == "windows" and target_os == "linux")
 
             if is_cross_compiling:
-                self.logger.warning(
-                    f"Cross-compilation detected: Building on {current_os} for {target_os}.\n"
-                    f"OLLVM passes require running opt binary for target platform.\n"
-                    f"OLLVM passes will be skipped. Applying other obfuscation layers only.\n"
-                    f"To enable OLLVM for cross-compilation, use Docker or build on target platform."
+                warning_msg = (
+                    f"Cross-compilation detected: Building on {current_os} for {target_os}. "
+                    f"OLLVM passes require running opt binary for target platform. "
+                    f"OLLVM passes will be skipped. Applying other obfuscation layers only."
                 )
+                self.logger.warning(warning_msg)
+                warnings.append(warning_msg)
                 enabled_passes = []  # Skip OLLVM passes for cross-compilation
+                actually_applied_passes = []  # No OLLVM passes applied
+
+                # Fall through to standard compilation without OLLVM
+                command = [compiler, str(source_abs), "-o", str(destination_abs)] + compiler_flags
+                resource_dir_flags = self._get_resource_dir_flag(compiler)
+                if resource_dir_flags:
+                    command.extend(resource_dir_flags)
+                if config.platform == Platform.WINDOWS:
+                    command.extend(["--target=x86_64-w64-mingw32"])
+                run_command(command, cwd=source_abs.parent)
+                return {
+                    "applied_passes": actually_applied_passes,
+                    "warnings": warnings,
+                    "disabled_passes": list(config.passes.enabled_passes())  # Original requested passes
+                }
 
             if enabled_passes:  # Re-check after potential cross-compilation skip
                 self.logger.info("Using opt-based workflow for OLLVM passes: %s", ", ".join(enabled_passes))
@@ -505,13 +538,16 @@ class LLVMObfuscator:
                 # Check for C++ exception handling (incompatible with ALL OLLVM passes)
                 if self._has_exception_handling(ir_file):
                     if enabled_passes:
-                        self.logger.warning(
+                        warning_msg = (
                             "C++ exception handling detected in IR (invoke/landingpad instructions). "
                             "ALL OLLVM passes are incompatible with C++ exception handling and will be disabled. "
                             "This is a known limitation of OLLVM. "
                             "Obfuscation will continue with compiler flags, string encryption, and symbol obfuscation only."
                         )
+                        self.logger.warning(warning_msg)
+                        warnings.append(warning_msg)
                         enabled_passes = []  # Disable ALL OLLVM passes
+                        actually_applied_passes = []  # No OLLVM passes applied
 
                 # Only continue with OLLVM if we still have passes enabled
                 if not enabled_passes:
@@ -531,7 +567,11 @@ class LLVMObfuscator:
                         ir_file.unlink()
 
                     run_command(command, cwd=source_abs.parent)
-                    return  # Exit early since we're not using OLLVM passes
+                    return {
+                        "applied_passes": actually_applied_passes,
+                        "warnings": warnings,
+                        "disabled_passes": [p for p in enabled_passes if p not in actually_applied_passes]
+                    }
 
                 # Step 2: Apply OLLVM passes using opt
                 obfuscated_ir = destination_abs.parent / f"{destination_abs.stem}_obfuscated.bc"
@@ -633,14 +673,21 @@ class LLVMObfuscator:
                     obfuscated_ir.unlink()
 
                 self.logger.info("OLLVM obfuscation complete")
+                return {
+                    "applied_passes": actually_applied_passes,
+                    "warnings": warnings,
+                    "disabled_passes": []
+                }
 
         elif enabled_passes:
             # Log warning but continue without passes
-            self.logger.warning(
-                "OLLVM passes requested (%s) but no plugin available. "
-                "Continuing with compiler flags only. Set custom_pass_plugin to enable passes.",
-                ", ".join(enabled_passes)
+            warning_msg = (
+                f"OLLVM passes requested ({', '.join(enabled_passes)}) but no plugin available. "
+                f"Continuing with compiler flags only. Set custom_pass_plugin to enable passes."
             )
+            self.logger.warning(warning_msg)
+            warnings.append(warning_msg)
+            actually_applied_passes = []  # No OLLVM passes applied
             command = [compiler, str(source_abs), "-o", str(destination_abs)] + compiler_flags
 
             # Add resource-dir flag if using custom clang
@@ -651,6 +698,11 @@ class LLVMObfuscator:
             if config.platform == Platform.WINDOWS:
                 command.extend(["--target=x86_64-w64-mingw32"])
             run_command(command, cwd=source_abs.parent)
+            return {
+                "applied_passes": actually_applied_passes,
+                "warnings": warnings,
+                "disabled_passes": enabled_passes
+            }
         else:
             # No OLLVM passes - standard compilation
             command = [compiler, str(source_abs), "-o", str(destination_abs)] + compiler_flags
@@ -663,6 +715,11 @@ class LLVMObfuscator:
             if config.platform == Platform.WINDOWS:
                 command.extend(["--target=x86_64-w64-mingw32"])
             run_command(command, cwd=source_abs.parent)
+            return {
+                "applied_passes": actually_applied_passes,
+                "warnings": warnings,
+                "disabled_passes": []
+            }
 
     def _estimate_metrics(
         self,

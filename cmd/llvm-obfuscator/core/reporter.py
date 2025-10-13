@@ -21,10 +21,12 @@ class ObfuscationReport:
                     "source_file": job_data.get("source_file"),
                     "platform": job_data.get("platform"),
                     "obfuscation_level": job_data.get("obfuscation_level"),
-                    "enabled_passes": job_data.get("enabled_passes", []),
+                    "requested_passes": job_data.get("requested_passes", []),  # What user requested
+                    "applied_passes": job_data.get("applied_passes", []),  # What was actually applied
                     "compiler_flags": job_data.get("compiler_flags", []),
                     "timestamp": job_data.get("timestamp", get_timestamp()),
                 },
+                "warnings": job_data.get("warnings", []),  # Warnings from obfuscation process
                 "output_attributes": job_data.get("output_attributes", {}),
                 "bogus_code_info": job_data.get("bogus_code_info", {}),
                 "cycles_completed": job_data.get("cycles_completed", {}),
@@ -71,12 +73,21 @@ class ObfuscationReport:
 
         # Extract data for easier access
         input_params = report.get("input_parameters", {})
+        warnings = report.get("warnings", [])
         output_attrs = report.get("output_attributes", {})
         bogus_code = report.get("bogus_code_info", {})
         cycles = report.get("cycles_completed", {})
         string_obf = report.get("string_obfuscation", {})
         fake_loops = report.get("fake_loops_inserted", {})
         symbol_obf = report.get("symbol_obfuscation", {})
+
+        # Format warnings list
+        warnings_html = ""
+        if warnings:
+            for i, warning in enumerate(warnings, 1):
+                warnings_html += f'<tr><td>{i}</td><td>{warning}</td></tr>'
+        else:
+            warnings_html = '<tr><td colspan="2">No warnings - all obfuscation techniques applied successfully</td></tr>'
 
         # Format file size
         file_size = output_attrs.get("file_size", 0)
@@ -303,8 +314,12 @@ class ObfuscationReport:
         <div class="field-value">Level {input_params.get('obfuscation_level', 0)}</div>
     </div>
     <div class="field">
-        <div class="field-label">Enabled Passes:</div>
-        <div class="field-value">{", ".join(input_params.get('enabled_passes', [])) or "None"}</div>
+        <div class="field-label">Requested OLLVM Passes:</div>
+        <div class="field-value">{", ".join(input_params.get('requested_passes', [])) or "None"}</div>
+    </div>
+    <div class="field">
+        <div class="field-label">Actually Applied OLLVM Passes:</div>
+        <div class="field-value"><strong>{", ".join(input_params.get('applied_passes', [])) or "None"}</strong></div>
     </div>
     <div class="field">
         <div class="field-label">Timestamp:</div>
@@ -314,6 +329,20 @@ class ObfuscationReport:
         <div class="field-label">Compiler Flags:</div>
         <div class="field-value"><code>{flags_list}</code></div>
     </div>
+
+    <!-- Warnings and Logs -->
+    <h2>Warnings & Processing Logs</h2>
+    <table>
+        <thead>
+            <tr>
+                <th style="width: 60px;">#</th>
+                <th>Message</th>
+            </tr>
+        </thead>
+        <tbody>
+            {warnings_html}
+        </tbody>
+    </table>
 
     <!-- Output File Attributes -->
     <h2>Output File Attributes</h2>
@@ -494,13 +523,20 @@ class ObfuscationReport:
 - **Source File:** `{input_params.get('source_file', 'N/A')}`
 - **Platform:** {input_params.get('platform', 'unknown')}
 - **Obfuscation Level:** Level {input_params.get('obfuscation_level', 0)}
-- **Enabled Passes:** {", ".join(input_params.get('enabled_passes', [])) or "None"}
+- **Requested OLLVM Passes:** {", ".join(input_params.get('requested_passes', [])) or "None"}
+- **Actually Applied OLLVM Passes:** **{", ".join(input_params.get('applied_passes', [])) or "None"}**
 - **Timestamp:** {input_params.get('timestamp', 'N/A')}
 
 ### Compiler Flags
 ```
 {' '.join(input_params.get('compiler_flags', []))}
 ```
+
+---
+
+## ⚠️ Warnings & Processing Logs
+
+{self._format_warnings_markdown(report.get('warnings', []))}
 
 ---
 
@@ -560,6 +596,16 @@ class ObfuscationReport:
 *🤖 Generated with LLVM Obfuscator API*
 """
         return md
+
+    def _format_warnings_markdown(self, warnings: List[str]) -> str:
+        """Format warnings list for markdown output."""
+        if not warnings:
+            return "✅ **No warnings** - All obfuscation techniques applied successfully"
+
+        md = ""
+        for i, warning in enumerate(warnings, 1):
+            md += f"{i}. {warning}\n"
+        return md.strip()
 
     def _write_pdf(self, path: Path, report: Dict[str, Any], job_id: str) -> None:
         """Generate a PDF report using ReportLab."""
