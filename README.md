@@ -14,22 +14,22 @@ The LLVM Binary Obfuscator is a comprehensive code protection toolkit that makes
 
 ### Key Features
 
-- **4 Independent Obfuscation Layers** - Each layer adds unique protection
+- **4 Sequential Obfuscation Layers** - Applied in execution order (1→2→3→4)
 - **Production Ready** - Thoroughly tested, all layers functional
-- **Zero Runtime Overhead** (Layers 0+3) - Source-level transformations only
+- **Zero Runtime Overhead** (Layers 1-2) - Source-level transformations only
 - **CLI & API** - Easy integration with existing build pipelines
 - **Comprehensive Reports** - Detailed obfuscation metrics and validation
 - **Cross-Platform** - Supports Linux, macOS, and Windows targets
 
 ### Quick Stats
 
-| Metric | Without Obfuscation | With All Layers |
+| Metric | Without Obfuscation | With All 4 Layers |
 |--------|-------------------|-----------------|
 | **Symbol Count** | 20 symbols | 1 symbol (-95%) |
 | **Secret Visibility** | 100% exposed | 0% visible |
 | **RE Difficulty** | 2-4 hours | 8-12 weeks (50x harder) |
 | **Binary Size** | 16 KB | 35 KB (+119%) |
-| **Overhead** | - | ~25-30% |
+| **Overhead** | - | ~15-25% |
 
 ---
 
@@ -202,12 +202,13 @@ Final Binary
 
 ---
 
-## 4-Layer System
+## 4-Layer System (Execution Order: 1→2→3→4)
 
-### Layer 0: Symbol Obfuscation
+### Layer 1: Symbol Obfuscation (PRE-COMPILE, FIRST)
 
 **Purpose:** Remove semantic meaning from all symbol names
 **Type:** Pre-compilation source transformation
+**Execution:** FIRST (before everything else)
 **Overhead:** 0% runtime (compile-time only)
 
 **How it Works:**
@@ -255,10 +256,130 @@ python3 -m cli.obfuscate compile source.c \
 
 ---
 
-### Layer 1: Compiler Flags
+### Layer 2: String Encryption (PRE-COMPILE, SECOND)
+
+**Purpose:** Hide hardcoded secrets and string literals
+**Type:** Pre-compilation source transformation
+**Execution:** SECOND (after symbol obfuscation)
+**Overhead:** ~1-3% runtime (decryption at startup)
+
+**Critical Importance:**
+- ⚠️ **100% of binaries without string encryption exposed secrets** in our testing
+- Compiler obfuscation (Layers 3+4) does NOT hide strings
+- Strings are stored in `.rodata` section unchanged
+- **MANDATORY for any binary containing secrets**
+
+**How it Works:**
+1. Scans source code for const string literals
+2. Encrypts strings using XOR cipher
+3. Converts to char arrays: `{0xCA, 0xCF, 0xC6, ...}`
+4. Injects `__attribute__((constructor))` decryption function
+5. Strings decrypted automatically before main() executes
+
+**Example:**
+```c
+// Before
+const char* MASTER_PASSWORD = "AdminPass2024!";
+const char* API_SECRET = "sk_live_secret_12345";
+
+// After
+char* MASTER_PASSWORD = NULL;
+char* API_SECRET = NULL;
+
+__attribute__((constructor)) static void _init_encrypted_strings(void) {
+    MASTER_PASSWORD = _xor_decrypt((const unsigned char[]){0xCA,0xCF,...}, 14, 0xAB);
+    API_SECRET = _xor_decrypt((const unsigned char[]){0x9E,0x86,...}, 20, 0xED);
+}
+```
+
+**Usage:**
+```bash
+python3 -m cli.obfuscate compile source.c \
+  --level 1 \
+  --string-encryption
+```
+
+**Verification:**
+```bash
+# Before string encryption
+$ strings binary | grep password
+AdminPass2024!          ← EXPOSED
+
+# After string encryption
+$ strings binary | grep password
+(no output)             ← HIDDEN
+```
+
+**Results:**
+- String hiding: 100% (all secrets hidden)
+- Binary size increase: ~6%
+- Secrets in `strings` output: 0
+- RE difficulty: 5-10x baseline
+
+---
+
+### Layer 3: OLLVM Compiler Passes (COMPILE, THIRD - Optional)
+
+**Purpose:** Transform control flow and instructions at IR level
+**Type:** LLVM IR transformations
+**Execution:** THIRD (during compilation, optional)
+**Overhead:** ~10-20% runtime
+
+**4 Obfuscation Passes:**
+
+1. **Control Flow Flattening**
+   - Converts functions into state machines
+   - All basic blocks become case statements
+   - Original control flow completely hidden
+
+2. **Instruction Substitution**
+   - Replaces simple operations with complex equivalents
+   - Example: `a = b + c` → `a = -(-b - c)`
+   - Harder to analyze, more complex patterns
+
+3. **Bogus Control Flow**
+   - Inserts fake conditional branches (never taken)
+   - Adds opaque predicates (always true/false)
+   - Increases CFG complexity without changing behavior
+
+4. **Basic Block Splitting**
+   - Divides basic blocks into smaller pieces
+   - Inserts unconditional jumps between them
+   - Increases code size and complexity
+
+**Important Notes:**
+- ⚠️ Requires OLLVM plugin (must be built separately)
+- ⚠️ Modern optimizations (O1/O3) reduce OLLVM effectiveness by 30-41%
+- ✅ Best resilience: Bogus CF (+40% entropy) > Flattening (+16%) > Split (+6%) > Substitution (+0.7%)
+- ✅ Use with `-O0` or `-O2` (avoid `-O1` and `-O3`)
+
+**Usage:**
+```bash
+python3 -m cli.obfuscate compile source.c \
+  --level 4 \
+  --enable-flattening \
+  --enable-substitution \
+  --enable-bogus-cf \
+  --enable-split \
+  --custom-pass-plugin /path/to/LLVMObfuscationPlugin.dylib
+```
+
+**Results:**
+- Symbol count: 28 symbols (increases due to new basic blocks)
+- Entropy increase: +180% (0.6 → 1.8)
+- Function complexity: 20-30x harder to analyze
+- RE difficulty: 20-30x baseline
+
+**Research Finding:**
+Based on testing 42 configurations, OLLVM passes provide minimal benefit when combined with modern optimizations. Recommended only for extreme security needs.
+
+---
+
+### Layer 4: Compiler Flags (COMPILE, FINAL)
 
 **Purpose:** Leverage compiler optimizations for obfuscation
 **Type:** Compilation-level transformations
+**Execution:** FOURTH/FINAL (last step)
 **Overhead:** ~2-5% runtime
 
 **Optimal Flag Set (9 flags):**

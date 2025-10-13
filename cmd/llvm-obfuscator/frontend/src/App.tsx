@@ -293,12 +293,11 @@ function App() {
   const [progress, setProgress] = useState<{ message: string; percent: number } | null>(null);
   const [detectedLanguage, setDetectedLanguage] = useState<'c' | 'cpp' | null>(null);
 
-  // Layer states
-  const [layer0, setLayer0] = useState(false); // Symbol obfuscation
-  const [layer1, setLayer1] = useState(false); // Compiler flags
-  const [layer2, setLayer2] = useState(false); // OLLVM passes
-  const [layer3, setLayer3] = useState(false); // Targeted obfuscation
-  const [layer4, setLayer4] = useState(false); // VM obfuscation
+  // Layer states (execution order: 1→2→3→4)
+  const [layer1, setLayer1] = useState(false); // Symbol obfuscation (PRE-COMPILE, FIRST)
+  const [layer2, setLayer2] = useState(false); // String encryption (PRE-COMPILE, SECOND)
+  const [layer3, setLayer3] = useState(false); // OLLVM passes (COMPILE, THIRD - optional)
+  const [layer4, setLayer4] = useState(false); // Compiler flags (COMPILE, FINAL)
 
   // Configuration states
   const [obfuscationLevel, setObfuscationLevel] = useState(3);
@@ -370,13 +369,12 @@ function App() {
   // Count active obfuscation layers
   const countLayers = useCallback(() => {
     let count = 0;
-    if (layer0) count++; // Symbol obfuscation
-    if (layer1) count++; // Compiler flags
-    if (layer2) count++; // OLLVM passes
-    if (layer3) count++; // String encryption + fake loops
-    if (layer4) count++; // VM obfuscation
+    if (layer1) count++; // Symbol obfuscation
+    if (layer2) count++; // String encryption
+    if (layer3) count++; // OLLVM passes
+    if (layer4) count++; // Compiler flags
     return count;
-  }, [layer0, layer1, layer2, layer3, layer4]);
+  }, [layer1, layer2, layer3, layer4]);
 
   // Validate source code syntax
   const validateCode = (code: string, language: 'c' | 'cpp'): { valid: boolean; error?: string } => {
@@ -442,14 +440,12 @@ function App() {
   const handleLayerChange = (layer: number, value: boolean) => {
     if (value) {
       // Enable this layer and all previous layers
-      if (layer >= 0) setLayer0(true);
       if (layer >= 1) setLayer1(true);
       if (layer >= 2) setLayer2(true);
       if (layer >= 3) setLayer3(true);
       if (layer >= 4) setLayer4(true);
     } else {
       // Disable this layer and all subsequent layers
-      if (layer <= 0) setLayer0(false);
       if (layer <= 1) setLayer1(false);
       if (layer <= 2) setLayer2(false);
       if (layer <= 3) setLayer3(false);
@@ -483,7 +479,7 @@ function App() {
       setModal({
         type: 'warning',
         title: 'No Obfuscation Layers Selected',
-        message: 'Please enable at least one obfuscation layer (Layer 0-4) before proceeding.'
+        message: 'Please enable at least one obfuscation layer (Layer 1-4) before proceeding.'
       });
       return;
     }
@@ -540,13 +536,13 @@ function App() {
       setProgress({ message: inputMode === 'file' ? 'Uploading file...' : 'Encoding source...', percent: 10 });
       const source_b64 = inputMode === 'file' ? await fileToBase64(file as File) : stringToBase64(pastedSource);
 
-      // Build compiler flags based on layers
+      // Build compiler flags based on Layer 4 (Compiler Flags)
       const flags: string[] = [...selectedFlags];
-      if (layer1) {
+      if (layer4) {
         flags.push('-flto', '-fvisibility=hidden', '-O3', '-fno-builtin',
                    '-flto=thin', '-fomit-frame-pointer', '-mspeculative-load-hardening', '-O1');
       }
-      if (layer2) {
+      if (layer3) {
         flags.push('-mllvm', '-fla', '-mllvm', '-bcf', '-mllvm', '-sub', '-mllvm', '-split');
       }
 
@@ -556,17 +552,17 @@ function App() {
         config: {
           level: obfuscationLevel,
           passes: {
-            flattening: layer2,
-            substitution: layer2,
-            bogus_control_flow: layer2,
-            split: layer2
+            flattening: layer3,
+            substitution: layer3,
+            bogus_control_flow: layer3,
+            split: layer3
           },
           cycles: cycles,
           target_platform: targetPlatform,
-          string_encryption: layer3,
-          fake_loops: layer3 ? fakeLoops : 0,
+          string_encryption: layer2,
+          fake_loops: layer2 ? fakeLoops : 0,
           symbol_obfuscation: {
-            enabled: layer0,
+            enabled: layer1,
             algorithm: symbolAlgorithm,
             hash_length: symbolHashLength,
             prefix_style: symbolPrefix,
@@ -653,7 +649,7 @@ function App() {
     }
   }, [
     file, inputMode, pastedSource, selectedFlags, obfuscationLevel, cycles, targetPlatform,
-    layer0, layer1, layer2, layer3, layer4, fakeLoops,
+    layer1, layer2, layer3, layer4, fakeLoops,
     symbolAlgorithm, symbolHashLength, symbolPrefix, symbolSalt, detectLanguage, countLayers
   ]);
 
@@ -762,21 +758,9 @@ function App() {
         <section className="section">
           <h2 className="section-title">[2] OBFUSCATION LAYERS</h2>
           <div className="layer-description">
-            Layers are cascading: selecting Layer N enables all layers 0 to N
+            Layers execute in order (1→2→3→4): selecting Layer N enables all layers 1 to N
           </div>
           <div className="layers-grid">
-            <label className="layer-checkbox">
-              <input
-                type="checkbox"
-                checked={layer0}
-                onChange={(e) => handleLayerChange(0, e.target.checked)}
-              />
-              <span className="layer-label">
-                [LAYER 0] Symbol Obfuscation
-                <small>Rename all functions/variables</small>
-              </span>
-            </label>
-
             <label className="layer-checkbox">
               <input
                 type="checkbox"
@@ -784,8 +768,8 @@ function App() {
                 onChange={(e) => handleLayerChange(1, e.target.checked)}
               />
               <span className="layer-label">
-                [LAYER 1] Compiler Flags
-                <small>9 optimal LLVM flags (82.5/100 score)</small>
+                [LAYER 1] Symbol Obfuscation (PRE-COMPILE, 1st)
+                <small>Cryptographic hash renaming of all symbols • 0% overhead</small>
               </span>
             </label>
 
@@ -796,8 +780,8 @@ function App() {
                 onChange={(e) => handleLayerChange(2, e.target.checked)}
               />
               <span className="layer-label">
-                [LAYER 2] OLLVM Passes
-                <small>4 passes: flatten, subst, bogus-cf, split</small>
+                [LAYER 2] String Encryption (PRE-COMPILE, 2nd)
+                <small>XOR encryption of string literals + runtime decryption • ~1-3% overhead</small>
               </span>
             </label>
 
@@ -808,8 +792,8 @@ function App() {
                 onChange={(e) => handleLayerChange(3, e.target.checked)}
               />
               <span className="layer-label">
-                [LAYER 3] Targeted Obfuscation
-                <small>String encryption + fake loops</small>
+                [LAYER 3] OLLVM Passes (COMPILE, 3rd - Optional)
+                <small>Control flow flattening, substitution, bogus CF, split • ~10-20% overhead</small>
               </span>
             </label>
 
@@ -820,13 +804,13 @@ function App() {
                 onChange={(e) => handleLayerChange(4, e.target.checked)}
               />
               <span className="layer-label">
-                [LAYER 4] VM Virtualization
-                <small>Bytecode VM protection (high overhead)</small>
+                [LAYER 4] Compiler Flags (COMPILE, FINAL)
+                <small>9 optimal LLVM flags: -flto, -fvisibility=hidden, etc. • ~2-5% overhead</small>
               </span>
             </label>
           </div>
 
-          {layer3 && (
+          {layer2 && (
             <div className="layer-config">
               <label>
                 Fake Loops:
@@ -841,7 +825,7 @@ function App() {
             </div>
           )}
 
-          {layer0 && (
+          {layer1 && (
             <div className="layer-config">
               <label>
                 Algorithm:
