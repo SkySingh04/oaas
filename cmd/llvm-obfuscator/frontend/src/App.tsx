@@ -597,24 +597,16 @@ function App() {
 
       setJobId(data.job_id);
 
-      // Handle multi-platform response
+      // Handle response - always single platform (Linux)
       const downloadUrlsMap: Record<Platform, string | null> = {
         linux: null,
         windows: null,
         macos: null
       };
 
-      if (data.download_urls) {
-        // Multi-platform build
-        if (data.download_urls.linux) {
-          downloadUrlsMap.linux = data.download_urls.linux.url;
-        }
-        if (data.download_urls.windows) {
-          downloadUrlsMap.windows = data.download_urls.windows.url;
-        }
-      } else if (data.download_url) {
-        // Legacy single platform
-        downloadUrlsMap[targetPlatform] = data.download_url;
+      if (data.download_url) {
+        // Single platform build (always Linux)
+        downloadUrlsMap.linux = data.download_url;
       }
 
       setDownloadUrls(downloadUrlsMap);

@@ -6,7 +6,7 @@ FROM python:3.11-slim
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 
-# Install system dependencies including LLVM development tools and MinGW for Windows cross-compilation
+# Install system dependencies including LLVM development tools
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     curl \
@@ -15,9 +15,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     llvm \
     lld \
     libc6-dev \
-    mingw-w64 \
-    g++-mingw-w64 \
-    gcc-mingw-w64 \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app

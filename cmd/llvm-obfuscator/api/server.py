@@ -267,60 +267,34 @@ def _run_obfuscation(job_id: str, source_path: Path, config: ObfuscationConfig) 
 async def api_obfuscate_sync(
     payload: ObfuscateRequest,
 ):
-    """Synchronous obfuscation - process immediately and return binaries for Linux and Windows."""
+    """Synchronous obfuscation - process immediately and return binary."""
     _validate_source_size(payload.source_code)
-    job = job_manager.create_job({"filename": payload.filename, "platform": "multi"})
+
+    # Always compile for Linux, regardless of what user selected
+    payload.platform = Platform.LINUX
+
+    job = job_manager.create_job({"filename": payload.filename, "platform": payload.platform.value})
     working_dir = report_base / job.job_id
     ensure_directory(working_dir)
     source_filename = _sanitize_filename(payload.filename)
     source_path = (working_dir / source_filename).resolve()
     _decode_source(payload.source_code, source_path)
-
-    # Build binaries for both Linux and Windows
-    platforms_to_build = [Platform.LINUX, Platform.WINDOWS]
-    results = {}
-    download_urls = {}
+    config = _build_config_from_request(payload, working_dir)
 
     try:
         job_manager.update_job(job.job_id, status="running")
+        result = obfuscator.obfuscate(source_path, config, job_id=job.job_id)
+        job_manager.update_job(job.job_id, status="completed", result=result)
+        job_manager.attach_reports(job.job_id, result.get("report_paths", {}))
 
-        for platform in platforms_to_build:
-            logger.info(f"Building binary for platform: {platform.value}")
-
-            # Create platform-specific config
-            platform_payload = payload.model_copy()
-            platform_payload.platform = platform
-            config = _build_config_from_request(platform_payload, working_dir)
-
-            # Obfuscate for this platform
-            result = obfuscator.obfuscate(source_path, config, job_id=f"{job.job_id}_{platform.value}")
-            results[platform.value] = result
-
-            # Verify binary exists
-            binary_path = Path(result.get("output_file", ""))
-            if not binary_path.exists():
-                logger.warning(f"Binary generation failed for {platform.value}")
-                continue
-
-            # Store download URL
-            download_urls[platform.value] = {
-                "url": f"/api/download/{job.job_id}/{platform.value}",
-                "name": binary_path.name,
-                "path": str(binary_path)
-            }
-
-        # Use the first successful result for report (typically Linux)
-        primary_result = results.get("linux") or results.get("windows")
-        if not primary_result:
-            raise HTTPException(status_code=500, detail="All platform builds failed")
-
-        job_manager.update_job(job.job_id, status="completed", result={"platforms": results, "download_urls": download_urls})
-        job_manager.attach_reports(job.job_id, primary_result.get("report_paths", {}))
+        binary_path = Path(result.get("output_file", ""))
+        if not binary_path.exists():
+            raise HTTPException(status_code=500, detail="Binary generation failed")
 
         return {
             "job_id": job.job_id,
             "status": "completed",
-            "download_urls": download_urls,
+            "download_url": f"/api/download/{job.job_id}",
             "report_url": f"/api/report/{job.job_id}",
         }
     except Exception as exc:
