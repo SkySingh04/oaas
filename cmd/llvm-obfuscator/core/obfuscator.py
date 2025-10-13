@@ -605,12 +605,13 @@ class LLVMObfuscator:
                 # SECOND: Check Docker installation path (production deployment)
                 elif Path("/usr/local/llvm-obfuscator/bin/opt").exists():
                     opt_binary = Path("/usr/local/llvm-obfuscator/bin/opt")
-                    docker_clang = Path("/usr/local/llvm-obfuscator/bin/clang")
                     self.logger.info("Using opt from Docker installation: %s", opt_binary)
 
-                    # Note: Docker clang doesn't have LLVMgold.so, so we keep using system clang for final compilation
-                    # Only opt is needed from Docker installation for OLLVM passes
-                    self.logger.info("Using Docker opt for OLLVM passes, but keeping system clang for final compilation (Docker clang lacks LLVMgold.so for LTO)")
+                    # IMPORTANT: Reset compiler to system clang
+                    # Docker clang doesn't have LLVMgold.so needed for LTO linking
+                    # We use Docker opt for OLLVM passes, but system clang for final compilation
+                    compiler = base_compiler  # Reset to system clang/clang++
+                    self.logger.info("Using Docker opt for OLLVM passes, system clang for final compilation (Docker clang lacks LLVMgold.so for LTO)")
                 # THIRD: Check if plugin is from LLVM build directory
                 elif "/llvm-project/build/lib/" in str(plugin_path_resolved):
                     # Plugin is from LLVM build, try to find opt and clang in same build
