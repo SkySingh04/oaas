@@ -137,6 +137,11 @@ class LLVMObfuscator:
 
         source_content = source_file.read_text(encoding="utf-8", errors="ignore")
 
+        # Compile baseline (unobfuscated) binary for comparison
+        self.logger.info("Compiling baseline binary for comparison...")
+        baseline_binary = output_directory / f"{source_file.stem}_baseline"
+        baseline_metrics = self._compile_and_analyze_baseline(source_file, baseline_binary, config)
+
         # Symbol obfuscation (if enabled) - applied FIRST before other transformations
         symbol_result = None
         working_source = source_file
@@ -244,6 +249,7 @@ class LLVMObfuscator:
             "compiler_flags": compiler_flags,
             "timestamp": get_timestamp(),
             "warnings": warnings_log,  # Add warnings to report
+            "baseline_metrics": baseline_metrics,  # Before obfuscation metrics
             "output_attributes": {
                 "file_size": file_size,
                 "binary_format": binary_format,
@@ -252,6 +258,16 @@ class LLVMObfuscator:
                 "functions_count": functions_count,
                 "entropy": entropy,
                 "obfuscation_methods": actually_applied_passes + (["symbol_obfuscation"] if symbol_result else []) + (["string_encryption"] if string_result else []),
+            },
+            "comparison": {
+                "size_change": file_size - baseline_metrics.get("file_size", file_size) if baseline_metrics else 0,
+                "size_change_percent": round(((file_size - baseline_metrics.get("file_size", file_size)) / baseline_metrics.get("file_size", file_size) * 100), 2) if baseline_metrics and baseline_metrics.get("file_size", 0) > 0 else 0,
+                "symbols_removed": baseline_metrics.get("symbols_count", 0) - symbols_count if baseline_metrics else 0,
+                "symbols_removed_percent": round(((baseline_metrics.get("symbols_count", 0) - symbols_count) / baseline_metrics.get("symbols_count", 1) * 100), 2) if baseline_metrics and baseline_metrics.get("symbols_count", 0) > 0 else 0,
+                "functions_removed": baseline_metrics.get("functions_count", 0) - functions_count if baseline_metrics else 0,
+                "functions_removed_percent": round(((baseline_metrics.get("functions_count", 0) - functions_count) / baseline_metrics.get("functions_count", 1) * 100), 2) if baseline_metrics and baseline_metrics.get("functions_count", 0) > 0 else 0,
+                "entropy_increase": round(entropy - baseline_metrics.get("entropy", 0), 3) if baseline_metrics else 0,
+                "entropy_increase_percent": round(((entropy - baseline_metrics.get("entropy", 0)) / baseline_metrics.get("entropy", 1) * 100), 2) if baseline_metrics and baseline_metrics.get("entropy", 0) > 0 else 0,
             },
             "bogus_code_info": base_metrics["bogus_code_info"],
             "cycles_completed": base_metrics["cycles_completed"],
@@ -720,6 +736,51 @@ class LLVMObfuscator:
                 "warnings": warnings,
                 "disabled_passes": []
             }
+
+    def _compile_and_analyze_baseline(self, source_file: Path, baseline_binary: Path, config: ObfuscationConfig) -> Dict:
+        """Compile an unobfuscated baseline binary and analyze its metrics for comparison."""
+        try:
+            # Detect compiler
+            if source_file.suffix in ['.cpp', '.cxx', '.cc', '.c++']:
+                compiler = "clang++"
+                compile_flags = ["-lstdc++"]
+            else:
+                compiler = "clang"
+                compile_flags = []
+
+            # Add minimal optimization flags
+            compile_flags.extend(["-O2"])
+
+            # Platform-specific flags
+            if config.platform == Platform.WINDOWS:
+                compile_flags.append("--target=x86_64-w64-mingw32")
+
+            # Compile baseline
+            command = [compiler, str(source_file), "-o", str(baseline_binary)] + compile_flags
+            run_command(command, cwd=source_file.parent)
+
+            # Analyze baseline binary
+            if baseline_binary.exists():
+                file_size = get_file_size(baseline_binary)
+                binary_format = detect_binary_format(baseline_binary)
+                sections = list_sections(baseline_binary)
+                symbols_count, functions_count = summarize_symbols(baseline_binary)
+                entropy = compute_entropy(baseline_binary.read_bytes())
+
+                return {
+                    "file_size": file_size,
+                    "binary_format": binary_format,
+                    "sections": sections,
+                    "symbols_count": symbols_count,
+                    "functions_count": functions_count,
+                    "entropy": entropy,
+                }
+            else:
+                self.logger.warning("Baseline binary not created")
+                return {}
+        except Exception as e:
+            self.logger.warning(f"Failed to compile baseline binary: {e}")
+            return {}
 
     def _estimate_metrics(
         self,

@@ -202,6 +202,14 @@ interface ReportData {
   enabled_passes: string[];
   compiler_flags: string[];
   timestamp: string;
+  baseline_metrics?: {
+    file_size: number;
+    binary_format: string;
+    sections: Record<string, number>;
+    symbols_count: number;
+    functions_count: number;
+    entropy: number;
+  };
   output_attributes: {
     file_size: number;
     binary_format: string;
@@ -210,6 +218,16 @@ interface ReportData {
     functions_count: number;
     entropy: number;
     obfuscation_methods: string[];
+  };
+  comparison?: {
+    size_change: number;
+    size_change_percent: number;
+    symbols_removed: number;
+    symbols_removed_percent: number;
+    functions_removed: number;
+    functions_removed_percent: number;
+    entropy_increase: number;
+    entropy_increase_percent: number;
   };
   bogus_code_info: {
     dead_code_blocks: number;
@@ -988,6 +1006,85 @@ function App() {
                 <div className="report-item">Timestamp: {report.timestamp || 'N/A'}</div>
                 <div className="report-item">Compiler Flags: {report.compiler_flags?.join(' ') || 'None'}</div>
               </div>
+
+              {/* Before/After Comparison */}
+              {report.baseline_metrics && report.comparison && (
+                <div className="report-block comparison-block" style={{ gridColumn: '1 / -1' }}>
+                  <h3>⚖️ BEFORE / AFTER COMPARISON</h3>
+                  <div className="comparison-grid-ui">
+                    <div className="comparison-card">
+                      <h4>📦 File Size</h4>
+                      <div className="comparison-row">
+                        <span className="comparison-label">Before:</span>
+                        <span className="comparison-value">{(report.baseline_metrics.file_size / 1024).toFixed(2)} KB</span>
+                      </div>
+                      <div className="comparison-row">
+                        <span className="comparison-label">After:</span>
+                        <span className="comparison-value">{(report.output_attributes.file_size / 1024).toFixed(2)} KB</span>
+                      </div>
+                      <div className={`comparison-change ${report.comparison.size_change_percent > 0 ? 'negative' : report.comparison.size_change_percent < 0 ? 'positive' : 'neutral'}`}>
+                        {report.comparison.size_change_percent > 0 ? '▲' : report.comparison.size_change_percent < 0 ? '▼' : '='} {Math.abs(report.comparison.size_change_percent).toFixed(2)}%
+                        <small>({report.comparison.size_change > 0 ? '+' : ''}{report.comparison.size_change} bytes)</small>
+                      </div>
+                    </div>
+
+                    <div className="comparison-card">
+                      <h4>🏷️ Symbol Count</h4>
+                      <div className="comparison-row">
+                        <span className="comparison-label">Before:</span>
+                        <span className="comparison-value">{report.baseline_metrics.symbols_count}</span>
+                      </div>
+                      <div className="comparison-row">
+                        <span className="comparison-label">After:</span>
+                        <span className="comparison-value">{report.output_attributes.symbols_count}</span>
+                      </div>
+                      <div className="comparison-change positive">
+                        ✓ {report.comparison.symbols_removed} removed ({report.comparison.symbols_removed_percent.toFixed(1)}%)
+                      </div>
+                      <div className="progress-bar-container">
+                        <div className="progress-bar-fill" style={{ width: `${Math.min(100, Math.abs(report.comparison.symbols_removed_percent))}%` }}>
+                          {report.comparison.symbols_removed_percent.toFixed(1)}%
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="comparison-card">
+                      <h4>⚙️ Function Count</h4>
+                      <div className="comparison-row">
+                        <span className="comparison-label">Before:</span>
+                        <span className="comparison-value">{report.baseline_metrics.functions_count}</span>
+                      </div>
+                      <div className="comparison-row">
+                        <span className="comparison-label">After:</span>
+                        <span className="comparison-value">{report.output_attributes.functions_count}</span>
+                      </div>
+                      <div className="comparison-change positive">
+                        ✓ {report.comparison.functions_removed} hidden ({report.comparison.functions_removed_percent.toFixed(1)}%)
+                      </div>
+                      <div className="progress-bar-container">
+                        <div className="progress-bar-fill" style={{ width: `${Math.min(100, Math.abs(report.comparison.functions_removed_percent))}%` }}>
+                          {report.comparison.functions_removed_percent.toFixed(1)}%
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="comparison-card">
+                      <h4>🔒 Binary Entropy</h4>
+                      <div className="comparison-row">
+                        <span className="comparison-label">Before:</span>
+                        <span className="comparison-value">{report.baseline_metrics.entropy.toFixed(3)}</span>
+                      </div>
+                      <div className="comparison-row">
+                        <span className="comparison-label">After:</span>
+                        <span className="comparison-value">{report.output_attributes.entropy.toFixed(3)}</span>
+                      </div>
+                      <div className="comparison-change positive">
+                        ✓ +{report.comparison.entropy_increase.toFixed(3)} ({report.comparison.entropy_increase_percent > 0 ? '+' : ''}{report.comparison.entropy_increase_percent.toFixed(1)}%)
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* Output Attributes */}
               {report.output_attributes && (

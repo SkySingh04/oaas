@@ -27,7 +27,9 @@ class ObfuscationReport:
                     "timestamp": job_data.get("timestamp", get_timestamp()),
                 },
                 "warnings": job_data.get("warnings", []),  # Warnings from obfuscation process
+                "baseline_metrics": job_data.get("baseline_metrics", {}),  # Before obfuscation metrics
                 "output_attributes": job_data.get("output_attributes", {}),
+                "comparison": job_data.get("comparison", {}),  # Before/after comparison
                 "bogus_code_info": job_data.get("bogus_code_info", {}),
                 "cycles_completed": job_data.get("cycles_completed", {}),
                 "string_obfuscation": job_data.get("string_obfuscation", {}),
@@ -74,7 +76,9 @@ class ObfuscationReport:
         # Extract data for easier access
         input_params = report.get("input_parameters", {})
         warnings = report.get("warnings", [])
+        baseline_metrics = report.get("baseline_metrics", {})
         output_attrs = report.get("output_attributes", {})
+        comparison = report.get("comparison", {})
         bogus_code = report.get("bogus_code_info", {})
         cycles = report.get("cycles_completed", {})
         string_obf = report.get("string_obfuscation", {})
@@ -258,6 +262,83 @@ class ObfuscationReport:
             font-size: 14px;
         }}
 
+        .comparison-grid {{
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin: 20px 0;
+        }}
+
+        .comparison-item {{
+            border: 1px solid #ddd;
+            padding: 15px;
+            border-radius: 4px;
+        }}
+
+        .comparison-item h3 {{
+            margin: 0 0 10px 0;
+            font-size: 16px;
+        }}
+
+        .metric-row {{
+            display: flex;
+            justify-content: space-between;
+            margin: 8px 0;
+            font-size: 14px;
+        }}
+
+        .metric-label {{
+            font-weight: 500;
+        }}
+
+        .metric-value {{
+            font-family: monospace;
+        }}
+
+        .change-indicator {{
+            margin-top: 8px;
+            padding: 8px;
+            border-radius: 4px;
+            text-align: center;
+            font-weight: bold;
+        }}
+
+        .change-positive {{
+            background-color: #d4edda;
+            color: #155724;
+        }}
+
+        .change-negative {{
+            background-color: #f8d7da;
+            color: #721c24;
+        }}
+
+        .change-neutral {{
+            background-color: #e2e3e5;
+            color: #383d41;
+        }}
+
+        .progress-bar {{
+            width: 100%;
+            height: 20px;
+            background: #f0f0f0;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            overflow: hidden;
+            margin-top: 5px;
+        }}
+
+        .progress-fill {{
+            height: 100%;
+            background: linear-gradient(90deg, #4CAF50, #45a049);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 12px;
+            font-weight: bold;
+        }}
+
         @media print {{
             body {{
                 padding: 10px;
@@ -343,6 +424,80 @@ class ObfuscationReport:
             {warnings_html}
         </tbody>
     </table>
+
+    <!-- Before/After Comparison -->
+    {f'''<h2>Before/After Comparison</h2>
+    <div class="comparison-grid">
+        <div class="comparison-item">
+            <h3>File Size</h3>
+            <div class="metric-row">
+                <span class="metric-label">Before:</span>
+                <span class="metric-value">{baseline_metrics.get("file_size", 0) / 1024:.2f} KB</span>
+            </div>
+            <div class="metric-row">
+                <span class="metric-label">After:</span>
+                <span class="metric-value">{output_attrs.get("file_size", 0) / 1024:.2f} KB</span>
+            </div>
+            <div class="change-indicator {("change-negative" if comparison.get("size_change_percent", 0) > 0 else "change-positive" if comparison.get("size_change_percent", 0) < 0 else "change-neutral")}">
+                {("+" if comparison.get("size_change_percent", 0) > 0 else "")}{comparison.get("size_change_percent", 0):.2f}% ({comparison.get("size_change", 0):+} bytes)
+            </div>
+        </div>
+
+        <div class="comparison-item">
+            <h3>Symbol Count</h3>
+            <div class="metric-row">
+                <span class="metric-label">Before:</span>
+                <span class="metric-value">{baseline_metrics.get("symbols_count", 0)}</span>
+            </div>
+            <div class="metric-row">
+                <span class="metric-label">After:</span>
+                <span class="metric-value">{output_attrs.get("symbols_count", 0)}</span>
+            </div>
+            <div class="change-indicator {("change-positive" if comparison.get("symbols_removed", 0) > 0 else "change-neutral")}">
+                {comparison.get("symbols_removed", 0)} symbols removed ({comparison.get("symbols_removed_percent", 0):.1f}%)
+            </div>
+            <div class="progress-bar">
+                <div class="progress-fill" style="width: {min(100, abs(comparison.get("symbols_removed_percent", 0)))}%">
+                    {comparison.get("symbols_removed_percent", 0):.1f}%
+                </div>
+            </div>
+        </div>
+
+        <div class="comparison-item">
+            <h3>Function Count</h3>
+            <div class="metric-row">
+                <span class="metric-label">Before:</span>
+                <span class="metric-value">{baseline_metrics.get("functions_count", 0)}</span>
+            </div>
+            <div class="metric-row">
+                <span class="metric-label">After:</span>
+                <span class="metric-value">{output_attrs.get("functions_count", 0)}</span>
+            </div>
+            <div class="change-indicator {("change-positive" if comparison.get("functions_removed", 0) > 0 else "change-neutral")}">
+                {comparison.get("functions_removed", 0)} functions hidden ({comparison.get("functions_removed_percent", 0):.1f}%)
+            </div>
+            <div class="progress-bar">
+                <div class="progress-fill" style="width: {min(100, abs(comparison.get("functions_removed_percent", 0)))}%">
+                    {comparison.get("functions_removed_percent", 0):.1f}%
+                </div>
+            </div>
+        </div>
+
+        <div class="comparison-item">
+            <h3>Binary Entropy</h3>
+            <div class="metric-row">
+                <span class="metric-label">Before:</span>
+                <span class="metric-value">{baseline_metrics.get("entropy", 0):.3f}</span>
+            </div>
+            <div class="metric-row">
+                <span class="metric-label">After:</span>
+                <span class="metric-value">{output_attrs.get("entropy", 0):.3f}</span>
+            </div>
+            <div class="change-indicator {("change-positive" if comparison.get("entropy_increase", 0) > 0 else "change-neutral")}">
+                +{comparison.get("entropy_increase", 0):.3f} entropy increase ({comparison.get("entropy_increase_percent", 0):+.1f}%)
+            </div>
+        </div>
+    </div>''' if baseline_metrics and comparison else ''}
 
     <!-- Output File Attributes -->
     <h2>Output File Attributes</h2>
@@ -493,7 +648,9 @@ class ObfuscationReport:
         timestamp = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC")
 
         input_params = report.get("input_parameters", {})
+        baseline_metrics = report.get("baseline_metrics", {})
         output_attrs = report.get("output_attributes", {})
+        comparison = report.get("comparison", {})
         bogus_code = report.get("bogus_code_info", {})
         cycles = report.get("cycles_completed", {})
         string_obf = report.get("string_obfuscation", {})
@@ -539,6 +696,8 @@ class ObfuscationReport:
 {self._format_warnings_markdown(report.get('warnings', []))}
 
 ---
+
+{self._format_comparison_markdown(baseline_metrics, output_attrs, comparison)}
 
 ## 📦 Output File Attributes
 
@@ -606,6 +765,50 @@ class ObfuscationReport:
         for i, warning in enumerate(warnings, 1):
             md += f"{i}. {warning}\n"
         return md.strip()
+
+    def _format_comparison_markdown(self, baseline_metrics: Dict[str, Any],
+                                   output_attrs: Dict[str, Any],
+                                   comparison: Dict[str, Any]) -> str:
+        """Format before/after comparison for markdown output."""
+        if not baseline_metrics or not comparison:
+            return ""
+
+        md = """## 🔄 Before/After Comparison
+
+| Metric | Before | After | Change |
+|--------|--------|-------|--------|
+"""
+
+        # File Size
+        before_size = baseline_metrics.get("file_size", 0) / 1024
+        after_size = output_attrs.get("file_size", 0) / 1024
+        size_change = comparison.get("size_change_percent", 0)
+        size_indicator = "📈" if size_change > 0 else "📉" if size_change < 0 else "➡️"
+        md += f"| **File Size** | {before_size:.2f} KB | {after_size:.2f} KB | {size_indicator} {size_change:+.2f}% |\n"
+
+        # Symbol Count
+        before_symbols = baseline_metrics.get("symbols_count", 0)
+        after_symbols = output_attrs.get("symbols_count", 0)
+        symbols_removed = comparison.get("symbols_removed", 0)
+        symbols_percent = comparison.get("symbols_removed_percent", 0)
+        md += f"| **Symbols** | {before_symbols} | {after_symbols} | ✅ {symbols_removed} removed ({symbols_percent:.1f}%) |\n"
+
+        # Function Count
+        before_functions = baseline_metrics.get("functions_count", 0)
+        after_functions = output_attrs.get("functions_count", 0)
+        functions_removed = comparison.get("functions_removed", 0)
+        functions_percent = comparison.get("functions_removed_percent", 0)
+        md += f"| **Functions** | {before_functions} | {after_functions} | ✅ {functions_removed} hidden ({functions_percent:.1f}%) |\n"
+
+        # Binary Entropy
+        before_entropy = baseline_metrics.get("entropy", 0)
+        after_entropy = output_attrs.get("entropy", 0)
+        entropy_increase = comparison.get("entropy_increase", 0)
+        entropy_percent = comparison.get("entropy_increase_percent", 0)
+        md += f"| **Entropy** | {before_entropy:.3f} | {after_entropy:.3f} | 🔒 +{entropy_increase:.3f} ({entropy_percent:+.1f}%) |\n"
+
+        md += "\n---\n\n"
+        return md
 
     def _write_pdf(self, path: Path, report: Dict[str, Any], job_id: str) -> None:
         """Generate a PDF report using ReportLab."""
