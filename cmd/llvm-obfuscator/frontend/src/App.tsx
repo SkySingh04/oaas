@@ -195,13 +195,16 @@ int main() {
 };
 
 interface ReportData {
-  job_id: string;
-  source_file: string;
-  platform: string;
-  obfuscation_level: number;
-  enabled_passes: string[];
-  compiler_flags: string[];
-  timestamp: string;
+  input_parameters?: {
+    source_file: string;
+    platform: string;
+    obfuscation_level: number;
+    requested_passes: string[];
+    applied_passes: string[];
+    compiler_flags: string[];
+    timestamp: string;
+  };
+  warnings?: string[];
   baseline_metrics?: {
     file_size: number;
     binary_format: string;
@@ -936,7 +939,7 @@ function App() {
             </div>
           )}
 
-          {downloadUrls[targetPlatform] && (
+          {(downloadUrls.linux || downloadUrls.windows || downloadUrls.macos) && (
             <div className="download-section">
               <h3>Download Obfuscated Binary:</h3>
               <div className="download-buttons">
@@ -1000,11 +1003,11 @@ function App() {
               {/* Input Parameters */}
               <div className="report-block">
                 <h3>INPUT PARAMETERS</h3>
-                <div className="report-item">Source: {report.source_file || 'N/A'}</div>
-                <div className="report-item">Platform: {report.platform || 'N/A'}</div>
-                <div className="report-item">Level: {report.obfuscation_level ?? 'N/A'}</div>
-                <div className="report-item">Timestamp: {report.timestamp || 'N/A'}</div>
-                <div className="report-item">Compiler Flags: {report.compiler_flags?.join(' ') || 'None'}</div>
+                <div className="report-item">Source: {report.input_parameters?.source_file || 'N/A'}</div>
+                <div className="report-item">Platform: {report.input_parameters?.platform || 'N/A'}</div>
+                <div className="report-item">Level: {report.input_parameters?.obfuscation_level ?? 'N/A'}</div>
+                <div className="report-item">Timestamp: {report.input_parameters?.timestamp || 'N/A'}</div>
+                <div className="report-item">Compiler Flags: {report.input_parameters?.compiler_flags?.join(' ') || 'None'}</div>
               </div>
 
               {/* Before/After Comparison */}
