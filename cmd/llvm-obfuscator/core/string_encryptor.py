@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import random
 import re
 from dataclasses import dataclass
@@ -21,6 +22,24 @@ class XORStringEncryptor:
 
     def __init__(self, seed: int = 1337) -> None:
         self._rand = random.Random(seed)
+        self.logger = logging.getLogger(__name__)
+
+    def _is_already_encrypted(self, source: str) -> bool:
+        """
+        Check if source code has already been string-encrypted.
+        Returns True if encryption helper functions are present.
+        """
+        # Check for our encryption marker functions
+        markers = [
+            '_xor_decrypt',
+            '_secure_free',
+            '_init_encrypted_strings',
+            '/* XOR String Decryption Helper */'
+        ]
+
+        # If we find multiple markers, file is already encrypted
+        found_markers = sum(1 for marker in markers if marker in source)
+        return found_markers >= 2
 
     def encrypt_strings(self, source: str) -> StringEncryptionResult:
         """
@@ -31,6 +50,19 @@ class XORStringEncryptor:
         1. Convert const globals to static non-const variables (initialized to NULL)
         2. Generate a static constructor that initializes them with decrypted values
         """
+        # Check if file has already been string-encrypted
+        if self._is_already_encrypted(source):
+            self.logger.warning("Source code has already been string-encrypted. Skipping to avoid duplicate helper functions.")
+            # Return the source as-is without re-encrypting
+            return StringEncryptionResult(
+                total_strings=0,
+                encrypted_strings=0,
+                encryption_method="already-encrypted",
+                encryption_percentage=0.0,
+                metadata=[],
+                transformed_source=source,
+            )
+
         # First, find const global string declarations
         const_globals = self._extract_const_globals(source)
 
