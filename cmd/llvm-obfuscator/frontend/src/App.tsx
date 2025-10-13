@@ -300,7 +300,7 @@ function App() {
   const [layer4, setLayer4] = useState(false); // Compiler flags (COMPILE, FINAL)
 
   // Configuration states
-  const [obfuscationLevel, setObfuscationLevel] = useState(3);
+  const [obfuscationLevel, setObfuscationLevel] = useState(5);
   const [cycles, setCycles] = useState(1);
   const [targetPlatform, setTargetPlatform] = useState<Platform>('linux');
   const [fakeLoops, setFakeLoops] = useState(0);
@@ -593,12 +593,28 @@ function App() {
       const customBinaryName = `obfuscated_${layerCount}_layer`;
 
       setJobId(data.job_id);
-      setDownloadUrls({
-        [targetPlatform]: data.download_url,
-        linux: targetPlatform === 'linux' ? data.download_url : null,
-        windows: targetPlatform === 'windows' ? data.download_url : null,
-        macos: targetPlatform === 'macos' ? data.download_url : null
-      });
+
+      // Handle multi-platform response
+      const downloadUrlsMap: Record<Platform, string | null> = {
+        linux: null,
+        windows: null,
+        macos: null
+      };
+
+      if (data.download_urls) {
+        // Multi-platform build
+        if (data.download_urls.linux) {
+          downloadUrlsMap.linux = data.download_urls.linux.url;
+        }
+        if (data.download_urls.windows) {
+          downloadUrlsMap.windows = data.download_urls.windows.url;
+        }
+      } else if (data.download_url) {
+        // Legacy single platform
+        downloadUrlsMap[targetPlatform] = data.download_url;
+      }
+
+      setDownloadUrls(downloadUrlsMap);
       setBinaryName(customBinaryName);
       setProgress({ message: 'Complete!', percent: 100 });
 

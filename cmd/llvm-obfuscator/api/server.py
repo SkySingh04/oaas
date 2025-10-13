@@ -267,32 +267,60 @@ def _run_obfuscation(job_id: str, source_path: Path, config: ObfuscationConfig) 
 async def api_obfuscate_sync(
     payload: ObfuscateRequest,
 ):
-    """Synchronous obfuscation - process immediately and return binary."""
+    """Synchronous obfuscation - process immediately and return binaries for Linux and Windows."""
     _validate_source_size(payload.source_code)
-    job = job_manager.create_job({"filename": payload.filename, "platform": payload.platform.value})
+    job = job_manager.create_job({"filename": payload.filename, "platform": "multi"})
     working_dir = report_base / job.job_id
     ensure_directory(working_dir)
     source_filename = _sanitize_filename(payload.filename)
     source_path = (working_dir / source_filename).resolve()
     _decode_source(payload.source_code, source_path)
-    config = _build_config_from_request(payload, working_dir)
-    
+
+    # Build binaries for both Linux and Windows
+    platforms_to_build = [Platform.LINUX, Platform.WINDOWS]
+    results = {}
+    download_urls = {}
+
     try:
         job_manager.update_job(job.job_id, status="running")
-        result = obfuscator.obfuscate(source_path, config, job_id=job.job_id)
-        job_manager.update_job(job.job_id, status="completed", result=result)
-        job_manager.attach_reports(job.job_id, result.get("report_paths", {}))
-        
-        # Return job info with binary download link
-        binary_path = Path(result.get("output_file", ""))
-        if not binary_path.exists():
-            raise HTTPException(status_code=500, detail="Binary generation failed")
-        
+
+        for platform in platforms_to_build:
+            logger.info(f"Building binary for platform: {platform.value}")
+
+            # Create platform-specific config
+            platform_payload = payload.model_copy()
+            platform_payload.platform = platform
+            config = _build_config_from_request(platform_payload, working_dir)
+
+            # Obfuscate for this platform
+            result = obfuscator.obfuscate(source_path, config, job_id=f"{job.job_id}_{platform.value}")
+            results[platform.value] = result
+
+            # Verify binary exists
+            binary_path = Path(result.get("output_file", ""))
+            if not binary_path.exists():
+                logger.warning(f"Binary generation failed for {platform.value}")
+                continue
+
+            # Store download URL
+            download_urls[platform.value] = {
+                "url": f"/api/download/{job.job_id}/{platform.value}",
+                "name": binary_path.name,
+                "path": str(binary_path)
+            }
+
+        # Use the first successful result for report (typically Linux)
+        primary_result = results.get("linux") or results.get("windows")
+        if not primary_result:
+            raise HTTPException(status_code=500, detail="All platform builds failed")
+
+        job_manager.update_job(job.job_id, status="completed", result={"platforms": results, "download_urls": download_urls})
+        job_manager.attach_reports(job.job_id, primary_result.get("report_paths", {}))
+
         return {
             "job_id": job.job_id,
             "status": "completed",
-            "download_url": f"/api/download/{job.job_id}",
-            "binary_name": binary_path.name,
+            "download_urls": download_urls,
             "report_url": f"/api/report/{job.job_id}",
         }
     except Exception as exc:
@@ -396,22 +424,62 @@ async def websocket_progress(websocket: WebSocket, job_id: str):
         logger.info("WebSocket disconnected for job %s", job_id)
 
 
-@app.get("/api/download/{job_id}")
-async def api_download_binary(job_id: str):
-    """Download the obfuscated binary."""
+@app.get("/api/download/{job_id}/{platform}")
+async def api_download_binary_platform(job_id: str, platform: str):
+    """Download the obfuscated binary for a specific platform."""
     try:
         job = job_manager.get_job(job_id)
     except JobNotFoundError:
         raise HTTPException(status_code=404, detail="Job not found")
-    
+
     result = job.metadata.get("result")
     if not result:
         raise HTTPException(status_code=400, detail="Job not completed")
-    
-    binary_path = Path(result.get("output_file", ""))
+
+    # Check if this is a multi-platform build
+    download_urls = result.get("download_urls", {})
+    if download_urls and platform in download_urls:
+        binary_path = Path(download_urls[platform]["path"])
+        if not binary_path.exists():
+            raise HTTPException(status_code=404, detail=f"Binary not found for platform {platform}")
+
+        return FileResponse(
+            binary_path,
+            media_type="application/octet-stream",
+            filename=binary_path.name
+        )
+
+    raise HTTPException(status_code=404, detail=f"Platform {platform} not found for this job")
+
+@app.get("/api/download/{job_id}")
+async def api_download_binary(job_id: str):
+    """Download the obfuscated binary (legacy single-platform support)."""
+    try:
+        job = job_manager.get_job(job_id)
+    except JobNotFoundError:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    result = job.metadata.get("result")
+    if not result:
+        raise HTTPException(status_code=400, detail="Job not completed")
+
+    # Check if this is a multi-platform build
+    download_urls = result.get("download_urls", {})
+    if download_urls:
+        # Return Linux binary by default
+        if "linux" in download_urls:
+            binary_path = Path(download_urls["linux"]["path"])
+        elif "windows" in download_urls:
+            binary_path = Path(download_urls["windows"]["path"])
+        else:
+            raise HTTPException(status_code=404, detail="No binaries available")
+    else:
+        # Legacy single-platform build
+        binary_path = Path(result.get("output_file", ""))
+
     if not binary_path.exists():
         raise HTTPException(status_code=404, detail="Obfuscated binary not found")
-    
+
     return FileResponse(
         binary_path,
         media_type="application/octet-stream",
