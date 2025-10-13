@@ -555,7 +555,7 @@ function App() {
             salt: symbolSalt || null
           }
         },
-        report_formats: ['json'],
+        report_formats: ['json', 'markdown'],
         custom_flags: Array.from(new Set(flags.flatMap(f => f.split(' ')).map(t => t.trim()).filter(t => t.length > 0)))
       };
 
@@ -935,6 +935,40 @@ function App() {
                 ))}
               </div>
               {binaryName && <div className="binary-name">File: {binaryName}</div>}
+
+              {jobId && (
+                <div style={{ marginTop: '15px' }}>
+                  <h3>Download Report:</h3>
+                  <div className="download-buttons">
+                    <button
+                      className="download-btn"
+                      onClick={() => {
+                        const link = document.createElement('a');
+                        link.href = `/api/report/${jobId}?fmt=markdown`;
+                        link.download = `report_${jobId}.md`;
+                        document.body.appendChild(link);
+                        link.click();
+                        document.body.removeChild(link);
+                      }}
+                    >
+                      📄 MARKDOWN
+                    </button>
+                    <button
+                      className="download-btn"
+                      onClick={() => {
+                        const link = document.createElement('a');
+                        link.href = `/api/report/${jobId}?fmt=json`;
+                        link.download = `report_${jobId}.json`;
+                        document.body.appendChild(link);
+                        link.click();
+                        document.body.removeChild(link);
+                      }}
+                    >
+                      📊 JSON
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </section>

@@ -121,7 +121,7 @@ class ObfuscateRequest(BaseModel):
     filename: str
     platform: Platform = Platform.LINUX
     config: ConfigModel = ConfigModel()
-    report_formats: Optional[list[str]] = Field(default_factory=lambda: ["json"])
+    report_formats: Optional[list[str]] = Field(default_factory=lambda: ["json", "markdown"])
     custom_flags: Optional[list[str]] = None
     custom_pass_plugin: Optional[str] = None
 
