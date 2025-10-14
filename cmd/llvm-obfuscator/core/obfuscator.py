@@ -750,7 +750,21 @@ class LLVMObfuscator:
 
     def _compile_and_analyze_baseline(self, source_file: Path, baseline_binary: Path, config: ObfuscationConfig) -> Dict:
         """Compile an unobfuscated baseline binary and analyze its metrics for comparison."""
+        # Default values in case baseline compilation fails
+        default_metrics = {
+            "file_size": 0,
+            "binary_format": "unknown",
+            "sections": {},
+            "symbols_count": 0,
+            "functions_count": 0,
+            "entropy": 0.0,
+        }
+
         try:
+            # Use absolute paths to avoid path resolution issues
+            source_abs = source_file.resolve()
+            baseline_abs = baseline_binary.resolve()
+
             # Detect compiler
             if source_file.suffix in ['.cpp', '.cxx', '.cc', '.c++']:
                 compiler = "clang++"
@@ -766,9 +780,9 @@ class LLVMObfuscator:
             if config.platform == Platform.WINDOWS:
                 compile_flags.append("--target=x86_64-w64-mingw32")
 
-            # Compile baseline
-            command = [compiler, str(source_file), "-o", str(baseline_binary)] + compile_flags
-            run_command(command, cwd=source_file.parent)
+            # Compile baseline with absolute paths
+            command = [compiler, str(source_abs), "-o", str(baseline_abs)] + compile_flags
+            run_command(command)
 
             # Analyze baseline binary
             if baseline_binary.exists():
@@ -787,11 +801,11 @@ class LLVMObfuscator:
                     "entropy": entropy,
                 }
             else:
-                self.logger.warning("Baseline binary not created")
-                return {}
+                self.logger.warning("Baseline binary not created, using default metrics")
+                return default_metrics
         except Exception as e:
-            self.logger.warning(f"Failed to compile baseline binary: {e}")
-            return {}
+            self.logger.warning(f"Failed to compile baseline binary: {e}, using default metrics")
+            return default_metrics
 
     def _estimate_metrics(
         self,

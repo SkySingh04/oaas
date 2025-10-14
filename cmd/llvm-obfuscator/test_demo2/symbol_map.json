@@ -1,0 +1,66 @@
+{
+   "hash_algorithm" : 0,
+   "symbols" : [
+      {
+         "address" : 0,
+         "line" : 0,
+         "linkage" : 0,
+         "obfuscated" : "f_25d49ec5ab74",
+         "original" : "validate_input",
+         "size" : 0,
+         "source_file" : "",
+         "type" : 0
+      },
+      {
+         "address" : 0,
+         "line" : 0,
+         "linkage" : 0,
+         "obfuscated" : "f_97fea96d2309",
+         "original" : "factorial_recursive",
+         "size" : 0,
+         "source_file" : "",
+         "type" : 0
+      },
+      {
+         "address" : 0,
+         "line" : 0,
+         "linkage" : 0,
+         "obfuscated" : "f_a99bb124f1a5",
+         "original" : "display_result",
+         "size" : 0,
+         "source_file" : "",
+         "type" : 0
+      },
+      {
+         "address" : 0,
+         "line" : 0,
+         "linkage" : 0,
+         "obfuscated" : "f_f0229fb82304",
+         "original" : "print_header",
+         "size" : 0,
+         "source_file" : "",
+         "type" : 0
+      },
+      {
+         "address" : 0,
+         "line" : 0,
+         "linkage" : 0,
+         "obfuscated" : "v_1b16b1df538b",
+         "original" : "n",
+         "size" : 0,
+         "source_file" : "",
+         "type" : 1
+      },
+      {
+         "address" : 0,
+         "line" : 0,
+         "linkage" : 0,
+         "obfuscated" : "v_f6a214f7a5fc",
+         "original" : "result",
+         "size" : 0,
+         "source_file" : "",
+         "type" : 1
+      }
+   ],
+   "version" : "1.0"
+}

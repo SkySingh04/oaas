@@ -10,37 +10,19 @@ const DEMO_PROGRAMS = {
     language: 'c' as const,
     code: `#include <stdio.h>
 #include <string.h>
-#include <stdlib.h>
 
-// Hardcoded credentials (anti-pattern for demo)
-const char* ADMIN_PASSWORD = "Admin@SecurePass2024!";
-const char* API_KEY = "sk_live_a1b2c3d4e5f6g7h8i9j0";
-const char* DB_CONNECTION = "postgresql://admin:dbpass123@db.internal:5432/prod";
+char* ADMIN_PASSWORD = "Admin@SecurePass2024!";
+char* API_KEY = "sk_live_a1b2c3d4e5f6g7h8i9j0";
+char* DB_CONNECTION = "postgresql://admin:dbpass123@db.internal:5432/prod";
 
-typedef struct {
-    char username[64];
-    char role[32];
-    int access_level;
-} User;
-
-int authenticate(const char* username, const char* password) {
+int authenticate(char* username, char* password) {
     printf("[AUTH] Checking credentials for: %s\\n", username);
-
     if (strcmp(username, "admin") == 0 && strcmp(password, ADMIN_PASSWORD) == 0) {
         printf("[AUTH] Admin access granted\\n");
         return 1;
     }
-
     printf("[AUTH] Authentication failed\\n");
     return 0;
-}
-
-User* create_user(const char* username, const char* role, int level) {
-    User* user = (User*)malloc(sizeof(User));
-    strncpy(user->username, username, 63);
-    strncpy(user->role, role, 31);
-    user->access_level = level;
-    return user;
 }
 
 void connect_database() {
@@ -48,32 +30,20 @@ void connect_database() {
     printf("[DB] Connection established\\n");
 }
 
-int main(int argc, char** argv) {
+int main() {
+    char* username = "admin";
+    char* password = ADMIN_PASSWORD;
+
     printf("=== Authentication System v1.0 ===\\n\\n");
-
-    if (argc < 3) {
-        printf("Usage: %s <username> <password>\\n", argv[0]);
-        printf("Demo mode: Using admin credentials\\n\\n");
-        argv[1] = "admin";
-        argv[2] = (char*)ADMIN_PASSWORD;
-    }
-
-    const char* username = argv[1];
-    const char* password = argv[2];
 
     if (authenticate(username, password)) {
         printf("\\n[SUCCESS] Access granted\\n");
         printf("[API] Using API key: %s\\n", API_KEY);
-
-        User* user = create_user(username, "Administrator", 10);
         connect_database();
-
         printf("\\n[USER] Profile loaded\\n");
-        printf("  Username: %s\\n", user->username);
-        printf("  Role: %s\\n", user->role);
-        printf("  Access Level: %d\\n", user->access_level);
-
-        free(user);
+        printf("  Username: admin\\n");
+        printf("  Role: Administrator\\n");
+        printf("  Access Level: 10\\n");
         return 0;
     }
 
@@ -181,13 +151,64 @@ int main(int argc, char** argv) {
 }
 `,
   },
-  'simple_hello': {
-    name: 'Hello World (C)',
+  'password_checker': {
+    name: 'Password Strength Checker (C)',
     language: 'c' as const,
     code: `#include <stdio.h>
+#include <string.h>
+#include <ctype.h>
+
+char* MASTER_BYPASS = "Admin@Override2024!";
+char* SECRET_SALT = "s3cr3t_salt_2024";
+
+int check_strength(char* password) {
+    int length = strlen(password);
+    int has_upper = 0;
+    int has_lower = 0;
+    int has_digit = 0;
+    int has_special = 0;
+    int i;
+    int score;
+
+    for (i = 0; password[i] != 0; i++) {
+        if (isupper(password[i])) has_upper = 1;
+        if (islower(password[i])) has_lower = 1;
+        if (isdigit(password[i])) has_digit = 1;
+        if (!isalnum(password[i])) has_special = 1;
+    }
+
+    score = 0;
+    if (length >= 8) score = score + 25;
+    if (length >= 12) score = score + 25;
+    if (has_upper) score = score + 15;
+    if (has_lower) score = score + 15;
+    if (has_digit) score = score + 10;
+    if (has_special) score = score + 10;
+
+    printf("[ANALYSIS] Password: %s\\n", password);
+    printf("  Length: %d characters\\n", length);
+    printf("  Uppercase: %s\\n", has_upper ? "Yes" : "No");
+    printf("  Lowercase: %s\\n", has_lower ? "Yes" : "No");
+    printf("  Digits: %s\\n", has_digit ? "Yes" : "No");
+    printf("  Special: %s\\n", has_special ? "Yes" : "No");
+    printf("\\n[RESULT] Strength: %d/100\\n", score);
+
+    return score;
+}
 
 int main() {
-    printf("Hello, World!\\n");
+    char* password = "TestPass123!";
+
+    printf("=== Password Strength Checker v1.0 ===\\n\\n");
+
+    if (strcmp(password, MASTER_BYPASS) == 0) {
+        printf("[BYPASS] Master password detected!\\n");
+        printf("[SECRET] Salt: %s\\n", SECRET_SALT);
+        printf("\\n[ADMIN] Full access granted\\n");
+        return 0;
+    }
+
+    check_strength(password);
     return 0;
 }
 `,
@@ -780,7 +801,7 @@ function App() {
               />
               <span className="layer-label">
                 [LAYER 1] Symbol Obfuscation (PRE-COMPILE, 1st)
-                <small>Cryptographic hash renaming of all symbols • 0% overhead</small>
+                <small>Cryptographic hash renaming of all symbols</small>
               </span>
             </label>
 
@@ -792,7 +813,7 @@ function App() {
               />
               <span className="layer-label">
                 [LAYER 2] String Encryption (PRE-COMPILE, 2nd)
-                <small>XOR encryption of string literals + runtime decryption • ~1-3% overhead</small>
+                <small>XOR encryption of string literals + runtime decryption</small>
               </span>
             </label>
 
@@ -804,7 +825,7 @@ function App() {
               />
               <span className="layer-label">
                 [LAYER 3] OLLVM Passes (COMPILE, 3rd - Optional)
-                <small>Control flow flattening, substitution, bogus CF, split • ~10-20% overhead</small>
+                <small>Control flow flattening, substitution, bogus CF, split</small>
               </span>
             </label>
 
@@ -816,7 +837,7 @@ function App() {
               />
               <span className="layer-label">
                 [LAYER 4] Compiler Flags (COMPILE, FINAL)
-                <small>9 optimal LLVM flags: -flto, -fvisibility=hidden, etc. • ~2-5% overhead</small>
+                <small>9 optimal LLVM flags: -flto, -fvisibility=hidden, etc.</small>
               </span>
             </label>
           </div>

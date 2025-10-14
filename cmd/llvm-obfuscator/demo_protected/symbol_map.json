@@ -1,0 +1,176 @@
+{
+   "hash_algorithm" : 0,
+   "symbols" : [
+      {
+         "address" : 0,
+         "line" : 0,
+         "linkage" : 0,
+         "obfuscated" : "f_0c7992b3d2d2",
+         "original" : "init_users",
+         "size" : 0,
+         "source_file" : "",
+         "type" : 0
+      },
+      {
+         "address" : 0,
+         "line" : 0,
+         "linkage" : 0,
+         "obfuscated" : "f_0a9fc93cc940",
+         "original" : "authenticate_user",
+         "size" : 0,
+         "source_file" : "",
+         "type" : 0
+      },
+      {
+         "address" : 0,
+         "line" : 0,
+         "linkage" : 0,
+         "obfuscated" : "f_3ff16c1a3ff2",
+         "original" : "verify_api_key",
+         "size" : 0,
+         "source_file" : "",
+         "type" : 0
+      },
+      {
+         "address" : 0,
+         "line" : 0,
+         "linkage" : 0,
+         "obfuscated" : "f_12f52c0c0856",
+         "original" : "generate_jwt_token",
+         "size" : 0,
+         "source_file" : "",
+         "type" : 0
+      },
+      {
+         "address" : 0,
+         "line" : 0,
+         "linkage" : 0,
+         "obfuscated" : "f_9f5974383c59",
+         "original" : "verify_jwt_token",
+         "size" : 0,
+         "source_file" : "",
+         "type" : 0
+      },
+      {
+         "address" : 0,
+         "line" : 0,
+         "linkage" : 0,
+         "obfuscated" : "f_34ede220d91a",
+         "original" : "check_access_level",
+         "size" : 0,
+         "source_file" : "",
+         "type" : 0
+      },
+      {
+         "address" : 0,
+         "line" : 0,
+         "linkage" : 0,
+         "obfuscated" : "f_420e96d771d4",
+         "original" : "connect_to_database",
+         "size" : 0,
+         "source_file" : "",
+         "type" : 0
+      },
+      {
+         "address" : 0,
+         "line" : 0,
+         "linkage" : 0,
+         "obfuscated" : "f_f707f7349698",
+         "original" : "encrypt_data",
+         "size" : 0,
+         "source_file" : "",
+         "type" : 0
+      },
+      {
+         "address" : 0,
+         "line" : 0,
+         "linkage" : 0,
+         "obfuscated" : "f_1a2ef98af176",
+         "original" : "verify_oauth",
+         "size" : 0,
+         "source_file" : "",
+         "type" : 0
+      },
+      {
+         "address" : 0,
+         "line" : 0,
+         "linkage" : 0,
+         "obfuscated" : "f_fcae2dd27871",
+         "original" : "validate_license",
+         "size" : 0,
+         "source_file" : "",
+         "type" : 0
+      },
+      {
+         "address" : 0,
+         "line" : 0,
+         "linkage" : 0,
+         "obfuscated" : "f_799bf1b7712b",
+         "original" : "emergency_admin_access",
+         "size" : 0,
+         "source_file" : "",
+         "type" : 0
+      },
+      {
+         "address" : 0,
+         "line" : 0,
+         "linkage" : 0,
+         "obfuscated" : "v_5dddc5ef2b53",
+         "original" : "access_level",
+         "size" : 0,
+         "source_file" : "",
+         "type" : 1
+      },
+      {
+         "address" : 0,
+         "line" : 0,
+         "linkage" : 0,
+         "obfuscated" : "v_fbc01149fda7",
+         "original" : "user_count",
+         "size" : 0,
+         "source_file" : "",
+         "type" : 1
+      },
+      {
+         "address" : 0,
+         "line" : 0,
+         "linkage" : 0,
+         "obfuscated" : "v_40c041842ccb",
+         "original" : "authenticated",
+         "size" : 0,
+         "source_file" : "",
+         "type" : 1
+      },
+      {
+         "address" : 0,
+         "line" : 0,
+         "linkage" : 0,
+         "obfuscated" : "v_de7d1b721a1e",
+         "original" : "i",
+         "size" : 0,
+         "source_file" : "",
+         "type" : 1
+      },
+      {
+         "address" : 0,
+         "line" : 0,
+         "linkage" : 0,
+         "obfuscated" : "v_f18b3c49fd80",
+         "original" : "i",
+         "size" : 0,
+         "source_file" : "",
+         "type" : 1
+      },
+      {
+         "address" : 0,
+         "line" : 0,
+         "linkage" : 0,
+         "obfuscated" : "v_291335565d35",
+         "original" : "i",
+         "size" : 0,
+         "source_file" : "",
+         "type" : 1
+      }
+   ],
+   "version" : "1.0"
+}
