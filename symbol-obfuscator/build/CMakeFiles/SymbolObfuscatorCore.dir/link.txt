@@ -1,2 +1,0 @@
-/usr/bin/ar qc libSymbolObfuscatorCore.a CMakeFiles/SymbolObfuscatorCore.dir/src/crypto_hasher.cpp.o CMakeFiles/SymbolObfuscatorCore.dir/src/c_obfuscator.cpp.o CMakeFiles/SymbolObfuscatorCore.dir/src/cpp_mangler.cpp.o
-/usr/bin/ranlib libSymbolObfuscatorCore.a

@@ -1,6 +1,0 @@
-# Dependencies for the Agno agent helper CLI
-agno==2.1.0
-openai==2.0.1
-groq==0.32.0
-ollama==0.6.0
-python-dotenv>=1.0.1

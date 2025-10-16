@@ -1,284 +1,284 @@
-name: Build and Push to Docker Hub
+# name: Build and Push to Docker Hub
 
-on:
-  push:
-    branches: [ main, develop ]
-    tags: [ 'v*' ]
-  pull_request:
-    branches: [ main ]
+# on:
+#   push:
+#     branches: [ main, develop ]
+#     tags: [ 'v*' ]
+#   pull_request:
+#     branches: [ main ]
 
-env:
-  DOCKERHUB_REGISTRY: docker.io
-  IMAGE_NAME: ${{ github.repository }}
+# env:
+#   DOCKERHUB_REGISTRY: docker.io
+#   IMAGE_NAME: ${{ github.repository }}
 
-jobs:
-  build-and-push:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
+# jobs:
+#   build-and-push:
+#     runs-on: ubuntu-latest
+#     permissions:
+#       contents: read
 
-    steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
-      with:
-        lfs: true
+#     steps:
+#     - name: Checkout repository
+#       uses: actions/checkout@v4
+#       with:
+#         lfs: true
 
-    - name: Pull Git LFS files
-      run: git lfs pull
+#     - name: Pull Git LFS files
+#       run: git lfs pull
 
-    - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v3
+#     - name: Set up Docker Buildx
+#       uses: docker/setup-buildx-action@v3
 
-    - name: Log in to Docker Hub
-      uses: docker/login-action@v3
-      with:
-        username: ${{ secrets.DOCKERHUB_USERNAME }}
-        password: ${{ secrets.DOCKERHUB_TOKEN }}
+#     - name: Log in to Docker Hub
+#       uses: docker/login-action@v3
+#       with:
+#         username: ${{ secrets.DOCKERHUB_USERNAME }}
+#         password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-    - name: Extract backend metadata
-      id: meta-backend
-      uses: docker/metadata-action@v5
-      with:
-        images: |
-          ${{ env.DOCKERHUB_REGISTRY }}/${{ secrets.DOCKERHUB_USERNAME }}/llvm-obfuscator-backend
-        tags: |
-          type=ref,event=branch
-          type=ref,event=pr
-          type=semver,pattern={{version}}
-          type=semver,pattern={{major}}.{{minor}}
-          type=semver,pattern={{major}}
-          type=raw,value=latest,enable={{is_default_branch}}
+#     - name: Extract backend metadata
+#       id: meta-backend
+#       uses: docker/metadata-action@v5
+#       with:
+#         images: |
+#           ${{ env.DOCKERHUB_REGISTRY }}/${{ secrets.DOCKERHUB_USERNAME }}/llvm-obfuscator-backend
+#         tags: |
+#           type=ref,event=branch
+#           type=ref,event=pr
+#           type=semver,pattern={{version}}
+#           type=semver,pattern={{major}}.{{minor}}
+#           type=semver,pattern={{major}}
+#           type=raw,value=latest,enable={{is_default_branch}}
 
-    - name: Extract frontend metadata
-      id: meta-frontend
-      uses: docker/metadata-action@v5
-      with:
-        images: |
-          ${{ env.DOCKERHUB_REGISTRY }}/${{ secrets.DOCKERHUB_USERNAME }}/llvm-obfuscator-frontend
-        tags: |
-          type=ref,event=branch
-          type=ref,event=pr
-          type=semver,pattern={{version}}
-          type=semver,pattern={{major}}.{{minor}}
-          type=semver,pattern={{major}}
-          type=raw,value=latest,enable={{is_default_branch}}
+#     - name: Extract frontend metadata
+#       id: meta-frontend
+#       uses: docker/metadata-action@v5
+#       with:
+#         images: |
+#           ${{ env.DOCKERHUB_REGISTRY }}/${{ secrets.DOCKERHUB_USERNAME }}/llvm-obfuscator-frontend
+#         tags: |
+#           type=ref,event=branch
+#           type=ref,event=pr
+#           type=semver,pattern={{version}}
+#           type=semver,pattern={{major}}.{{minor}}
+#           type=semver,pattern={{major}}
+#           type=raw,value=latest,enable={{is_default_branch}}
 
-    - name: Build and push backend image
-      uses: docker/build-push-action@v5
-      with:
-        context: ./cmd/llvm-obfuscator
-        file: ./cmd/llvm-obfuscator/Dockerfile.backend
-        push: true
-        tags: ${{ steps.meta-backend.outputs.tags }}
-        labels: ${{ steps.meta-backend.outputs.labels }}
-        cache-from: type=gha
-        cache-to: type=gha,mode=max
-        platforms: linux/amd64
+#     - name: Build and push backend image
+#       uses: docker/build-push-action@v5
+#       with:
+#         context: ./cmd/llvm-obfuscator
+#         file: ./cmd/llvm-obfuscator/Dockerfile.backend
+#         push: true
+#         tags: ${{ steps.meta-backend.outputs.tags }}
+#         labels: ${{ steps.meta-backend.outputs.labels }}
+#         cache-from: type=gha
+#         cache-to: type=gha,mode=max
+#         platforms: linux/amd64
 
-    - name: Build and push frontend image
-      uses: docker/build-push-action@v5
-      with:
-        context: ./cmd/llvm-obfuscator/frontend
-        file: ./cmd/llvm-obfuscator/frontend/Dockerfile.frontend
-        push: true
-        tags: ${{ steps.meta-frontend.outputs.tags }}
-        labels: ${{ steps.meta-frontend.outputs.labels }}
-        cache-from: type=gha
-        cache-to: type=gha,mode=max
-        platforms: linux/amd64
+#     - name: Build and push frontend image
+#       uses: docker/build-push-action@v5
+#       with:
+#         context: ./cmd/llvm-obfuscator/frontend
+#         file: ./cmd/llvm-obfuscator/frontend/Dockerfile.frontend
+#         push: true
+#         tags: ${{ steps.meta-frontend.outputs.tags }}
+#         labels: ${{ steps.meta-frontend.outputs.labels }}
+#         cache-from: type=gha
+#         cache-to: type=gha,mode=max
+#         platforms: linux/amd64
 
-    - name: Generate Docker Hub deployment files
-      run: |
-        # Create deployment directory
-        mkdir -p deployment/dockerhub
+#     - name: Generate Docker Hub deployment files
+#       run: |
+#         # Create deployment directory
+#         mkdir -p deployment/dockerhub
         
-        # Generate docker-compose.yml for Docker Hub
-        cat > deployment/dockerhub/docker-compose.yml << 'EOF'
-        version: "3.9"
+#         # Generate docker-compose.yml for Docker Hub
+#         cat > deployment/dockerhub/docker-compose.yml << 'EOF'
+#         version: "3.9"
         
-        services:
-          backend:
-            image: ${{ secrets.DOCKERHUB_USERNAME }}/llvm-obfuscator-backend:latest
-            container_name: llvm-obfuscator-backend
-            environment:
-              - OBFUSCATOR_DISABLE_AUTH=false
-              - PYTHONDONTWRITEBYTECODE=1
-              - PYTHONUNBUFFERED=1
-            volumes:
-              - ./reports:/app/reports
-              - ./logs:/app/logs
-            expose:
-              - "8000"
-            restart: unless-stopped
-            healthcheck:
-              test: ["CMD", "curl", "-fsS", "http://localhost:8000/api/health"]
-              interval: 30s
-              timeout: 10s
-              retries: 3
-              start_period: 40s
-            networks:
-              - obfuscator-network
+#         services:
+#           backend:
+#             image: ${{ secrets.DOCKERHUB_USERNAME }}/llvm-obfuscator-backend:latest
+#             container_name: llvm-obfuscator-backend
+#             environment:
+#               - OBFUSCATOR_DISABLE_AUTH=false
+#               - PYTHONDONTWRITEBYTECODE=1
+#               - PYTHONUNBUFFERED=1
+#             volumes:
+#               - ./reports:/app/reports
+#               - ./logs:/app/logs
+#             expose:
+#               - "8000"
+#             restart: unless-stopped
+#             healthcheck:
+#               test: ["CMD", "curl", "-fsS", "http://localhost:8000/api/health"]
+#               interval: 30s
+#               timeout: 10s
+#               retries: 3
+#               start_period: 40s
+#             networks:
+#               - obfuscator-network
         
-          frontend:
-            image: ${{ secrets.DOCKERHUB_USERNAME }}/llvm-obfuscator-frontend:latest
-            container_name: llvm-obfuscator-frontend
-            ports:
-              - "80:80"
-            depends_on:
-              backend:
-                condition: service_healthy
-            restart: unless-stopped
-            healthcheck:
-              test: ["CMD", "curl", "-fsS", "http://localhost/"]
-              interval: 30s
-              timeout: 10s
-              retries: 3
-            networks:
-              - obfuscator-network
+#           frontend:
+#             image: ${{ secrets.DOCKERHUB_USERNAME }}/llvm-obfuscator-frontend:latest
+#             container_name: llvm-obfuscator-frontend
+#             ports:
+#               - "80:80"
+#             depends_on:
+#               backend:
+#                 condition: service_healthy
+#             restart: unless-stopped
+#             healthcheck:
+#               test: ["CMD", "curl", "-fsS", "http://localhost/"]
+#               interval: 30s
+#               timeout: 10s
+#               retries: 3
+#             networks:
+#               - obfuscator-network
         
-        networks:
-          obfuscator-network:
-            driver: bridge
+#         networks:
+#           obfuscator-network:
+#             driver: bridge
         
-        volumes:
-          reports:
-            driver: local
-          logs:
-            driver: local
-        EOF
+#         volumes:
+#           reports:
+#             driver: local
+#           logs:
+#             driver: local
+#         EOF
         
-        # Generate deployment script for Docker Hub
-        cat > deployment/dockerhub/deploy.sh << 'EOF'
-        #!/bin/bash
+#         # Generate deployment script for Docker Hub
+#         cat > deployment/dockerhub/deploy.sh << 'EOF'
+#         #!/bin/bash
         
-        # LLVM Obfuscator Docker Hub Deployment Script
-        set -e
+#         # LLVM Obfuscator Docker Hub Deployment Script
+#         set -e
         
-        echo "🚀 Deploying LLVM Obfuscator from Docker Hub..."
+#         echo "🚀 Deploying LLVM Obfuscator from Docker Hub..."
         
-        # Create necessary directories
-        mkdir -p reports logs
+#         # Create necessary directories
+#         mkdir -p reports logs
         
-        # Pull latest images
-        echo "📦 Pulling latest images from Docker Hub..."
-        docker pull ${{ secrets.DOCKERHUB_USERNAME }}/llvm-obfuscator-backend:latest
-        docker pull ${{ secrets.DOCKERHUB_USERNAME }}/llvm-obfuscator-frontend:latest
+#         # Pull latest images
+#         echo "📦 Pulling latest images from Docker Hub..."
+#         docker pull ${{ secrets.DOCKERHUB_USERNAME }}/llvm-obfuscator-backend:latest
+#         docker pull ${{ secrets.DOCKERHUB_USERNAME }}/llvm-obfuscator-frontend:latest
         
-        # Stop existing containers
-        echo "🛑 Stopping existing containers..."
-        docker-compose down || true
+#         # Stop existing containers
+#         echo "🛑 Stopping existing containers..."
+#         docker-compose down || true
         
-        # Start new containers
-        echo "🚀 Starting new containers..."
-        docker-compose up -d
+#         # Start new containers
+#         echo "🚀 Starting new containers..."
+#         docker-compose up -d
         
-        # Wait for services to be healthy
-        echo "⏳ Waiting for services to be healthy..."
-        sleep 30
+#         # Wait for services to be healthy
+#         echo "⏳ Waiting for services to be healthy..."
+#         sleep 30
         
-        # Check health
-        echo "🔍 Checking service health..."
-        if curl -fsS http://localhost:8000/api/health > /dev/null 2>&1; then
-          echo "✅ Backend is healthy"
-        else
-          echo "❌ Backend health check failed"
-          exit 1
-        fi
+#         # Check health
+#         echo "🔍 Checking service health..."
+#         if curl -fsS http://localhost:8000/api/health > /dev/null 2>&1; then
+#           echo "✅ Backend is healthy"
+#         else
+#           echo "❌ Backend health check failed"
+#           exit 1
+#         fi
         
-        if curl -fsS http://localhost/ > /dev/null 2>&1; then
-          echo "✅ Frontend is healthy"
-        else
-          echo "❌ Frontend health check failed"
-          exit 1
-        fi
+#         if curl -fsS http://localhost/ > /dev/null 2>&1; then
+#           echo "✅ Frontend is healthy"
+#         else
+#           echo "❌ Frontend health check failed"
+#           exit 1
+#         fi
         
-        # Clean up old images
-        echo "🧹 Cleaning up old images..."
-        docker image prune -f
+#         # Clean up old images
+#         echo "🧹 Cleaning up old images..."
+#         docker image prune -f
         
-        echo "🎉 Deployment completed successfully!"
-        echo "📊 Service Status:"
-        docker-compose ps
+#         echo "🎉 Deployment completed successfully!"
+#         echo "📊 Service Status:"
+#         docker-compose ps
         
-        echo "🌐 Application is available at:"
-        echo "   Frontend: http://localhost"
-        echo "   Backend API: http://localhost/api"
-        EOF
+#         echo "🌐 Application is available at:"
+#         echo "   Frontend: http://localhost"
+#         echo "   Backend API: http://localhost/api"
+#         EOF
         
-        chmod +x deployment/dockerhub/deploy.sh
+#         chmod +x deployment/dockerhub/deploy.sh
         
-        # Generate README for Docker Hub deployment
-        cat > deployment/dockerhub/README.md << 'EOF'
-        # LLVM Obfuscator Docker Hub Deployment
+#         # Generate README for Docker Hub deployment
+#         cat > deployment/dockerhub/README.md << 'EOF'
+#         # LLVM Obfuscator Docker Hub Deployment
         
-        This directory contains deployment files for running LLVM Obfuscator using Docker Hub images.
+#         This directory contains deployment files for running LLVM Obfuscator using Docker Hub images.
         
-        ## Quick Start
+#         ## Quick Start
         
-        1. Clone or download this repository
-        2. Navigate to the deployment directory
-        3. Run the deployment script:
-           ```bash
-           ./deploy.sh
-           ```
+#         1. Clone or download this repository
+#         2. Navigate to the deployment directory
+#         3. Run the deployment script:
+#            ```bash
+#            ./deploy.sh
+#            ```
         
-        ## Manual Deployment
+#         ## Manual Deployment
         
-        ```bash
-        # Pull latest images
-        docker pull your-username/llvm-obfuscator-backend:latest
-        docker pull your-username/llvm-obfuscator-frontend:latest
+#         ```bash
+#         # Pull latest images
+#         docker pull your-username/llvm-obfuscator-backend:latest
+#         docker pull your-username/llvm-obfuscator-frontend:latest
         
-        # Start services
-        docker-compose up -d
-        ```
+#         # Start services
+#         docker-compose up -d
+#         ```
         
-        ## Docker Hub Images
+#         ## Docker Hub Images
         
-        - **Backend**: `your-username/llvm-obfuscator-backend:latest`
-        - **Frontend**: `your-username/llvm-obfuscator-frontend:latest`
+#         - **Backend**: `your-username/llvm-obfuscator-backend:latest`
+#         - **Frontend**: `your-username/llvm-obfuscator-frontend:latest`
         
-        ## Services
+#         ## Services
         
-        - **Frontend**: Available at http://localhost
-        - **Backend API**: Available at http://localhost/api
-        - **Reports**: Stored in ./reports directory
+#         - **Frontend**: Available at http://localhost
+#         - **Backend API**: Available at http://localhost/api
+#         - **Reports**: Stored in ./reports directory
         
-        ## Management Commands
+#         ## Management Commands
         
-        ```bash
-        # View logs
-        docker-compose logs -f
+#         ```bash
+#         # View logs
+#         docker-compose logs -f
         
-        # Check status
-        docker-compose ps
+#         # Check status
+#         docker-compose ps
         
-        # Stop services
-        docker-compose down
+#         # Stop services
+#         docker-compose down
         
-        # Restart services
-        docker-compose restart
+#         # Restart services
+#         docker-compose restart
         
-        # Update to latest images
-        docker-compose pull
-        docker-compose up -d
-        ```
-        EOF
+#         # Update to latest images
+#         docker-compose pull
+#         docker-compose up -d
+#         ```
+#         EOF
 
-    - name: Upload Docker Hub deployment artifacts
-      uses: actions/upload-artifact@v4
-      with:
-        name: dockerhub-deployment-files
-        path: deployment/dockerhub/
-        retention-days: 30
+#     - name: Upload Docker Hub deployment artifacts
+#       uses: actions/upload-artifact@v4
+#       with:
+#         name: dockerhub-deployment-files
+#         path: deployment/dockerhub/
+#         retention-days: 30
 
-    - name: Notify Docker Hub deployment
-      if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-      run: |
-        echo "🚀 Docker images built and pushed to Docker Hub successfully!"
-        echo "📦 Images available at:"
-        echo "  - Backend: ${{ secrets.DOCKERHUB_USERNAME }}/llvm-obfuscator-backend:latest"
-        echo "  - Frontend: ${{ secrets.DOCKERHUB_USERNAME }}/llvm-obfuscator-frontend:latest"
-        echo "📋 Deployment artifacts uploaded as GitHub Actions artifact"
+#     - name: Notify Docker Hub deployment
+#       if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+#       run: |
+#         echo "🚀 Docker images built and pushed to Docker Hub successfully!"
+#         echo "📦 Images available at:"
+#         echo "  - Backend: ${{ secrets.DOCKERHUB_USERNAME }}/llvm-obfuscator-backend:latest"
+#         echo "  - Frontend: ${{ secrets.DOCKERHUB_USERNAME }}/llvm-obfuscator-frontend:latest"
+#         echo "📋 Deployment artifacts uploaded as GitHub Actions artifact"
 
 

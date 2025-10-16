@@ -1,135 +1,135 @@
-name: Deploy to PB Server
+# name: Deploy to PB Server
 
-on:
-  workflow_dispatch:
-  workflow_run:
-    workflows: ["Build and Push to Docker Hub"]
-    types: [completed]
-    branches: [ main ]
+# on:
+#   workflow_dispatch:
+#   workflow_run:
+#     workflows: ["Build and Push to Docker Hub"]
+#     types: [completed]
+#     branches: [ main ]
 
-jobs:
-  deploy:
-    runs-on: ubuntu-latest
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+# jobs:
+#   deploy:
+#     runs-on: ubuntu-latest
+#     if: ${{ github.event.workflow_run.conclusion == 'success' }}
     
-    steps:
-      - name: Deploy to server
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.SSH_HOST }}
-          username: ${{ secrets.SSH_USERNAME }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          port: ${{ secrets.SSH_PORT || 22 }}
-          debug: true
-          timeout: 60s
-          command_timeout: 300s
-          script: |
-            set -e
-            echo "🚀 Deploying LLVM Obfuscator..."
+#     steps:
+#       - name: Deploy to server
+#         uses: appleboy/ssh-action@v1.0.3
+#         with:
+#           host: ${{ secrets.SSH_HOST }}
+#           username: ${{ secrets.SSH_USERNAME }}
+#           key: ${{ secrets.SSH_PRIVATE_KEY }}
+#           port: ${{ secrets.SSH_PORT || 22 }}
+#           debug: true
+#           timeout: 60s
+#           command_timeout: 300s
+#           script: |
+#             set -e
+#             echo "🚀 Deploying LLVM Obfuscator..."
             
-            cd oaas/
+#             cd oaas/
             
-            # Create docker-compose.yml
-            cat > docker-compose.yml << 'EOF'
-            version: "3.9"
+#             # Create docker-compose.yml
+#             cat > docker-compose.yml << 'EOF'
+#             version: "3.9"
             
-            services:
-              backend:
-                image: ${{ secrets.DOCKERHUB_USERNAME }}/llvm-obfuscator-backend:latest
-                container_name: llvm-obfuscator-backend
-                environment:
-                  - OBFUSCATOR_DISABLE_AUTH=false
-                  - PYTHONDONTWRITEBYTECODE=1
-                  - PYTHONUNBUFFERED=1
-                volumes:
-                  - ./reports:/app/reports
-                  - ./logs:/app/logs
-                expose:
-                  - "8000"
-                restart: unless-stopped
-                healthcheck:
-                  test: ["CMD", "curl", "-fsS", "http://localhost:8000/api/health"]
-                  interval: 30s
-                  timeout: 10s
-                  retries: 3
-                  start_period: 40s
-                networks:
-                  - obfuscator-network
+#             services:
+#               backend:
+#                 image: ${{ secrets.DOCKERHUB_USERNAME }}/llvm-obfuscator-backend:latest
+#                 container_name: llvm-obfuscator-backend
+#                 environment:
+#                   - OBFUSCATOR_DISABLE_AUTH=false
+#                   - PYTHONDONTWRITEBYTECODE=1
+#                   - PYTHONUNBUFFERED=1
+#                 volumes:
+#                   - ./reports:/app/reports
+#                   - ./logs:/app/logs
+#                 expose:
+#                   - "8000"
+#                 restart: unless-stopped
+#                 healthcheck:
+#                   test: ["CMD", "curl", "-fsS", "http://localhost:8000/api/health"]
+#                   interval: 30s
+#                   timeout: 10s
+#                   retries: 3
+#                   start_period: 40s
+#                 networks:
+#                   - obfuscator-network
             
-              frontend:
-                image: ${{ secrets.DOCKERHUB_USERNAME }}/llvm-obfuscator-frontend:latest
-                container_name: llvm-obfuscator-frontend
-                ports:
-                  - "80:80"
-                depends_on:
-                  backend:
-                    condition: service_healthy
-                restart: unless-stopped
-                healthcheck:
-                  test: ["CMD", "curl", "-fsS", "http://localhost/"]
-                  interval: 30s
-                  timeout: 10s
-                  retries: 3
-                networks:
-                  - obfuscator-network
+#               frontend:
+#                 image: ${{ secrets.DOCKERHUB_USERNAME }}/llvm-obfuscator-frontend:latest
+#                 container_name: llvm-obfuscator-frontend
+#                 ports:
+#                   - "80:80"
+#                 depends_on:
+#                   backend:
+#                     condition: service_healthy
+#                 restart: unless-stopped
+#                 healthcheck:
+#                   test: ["CMD", "curl", "-fsS", "http://localhost/"]
+#                   interval: 30s
+#                   timeout: 10s
+#                   retries: 3
+#                 networks:
+#                   - obfuscator-network
             
-            networks:
-              obfuscator-network:
-                driver: bridge
+#             networks:
+#               obfuscator-network:
+#                 driver: bridge
             
-            volumes:
-              reports:
-                driver: local
-              logs:
-                driver: local
-            EOF
+#             volumes:
+#               reports:
+#                 driver: local
+#               logs:
+#                 driver: local
+#             EOF
             
-            # Create necessary directories
-            mkdir -p reports logs
+#             # Create necessary directories
+#             mkdir -p reports logs
             
-            # Pull latest images
-            echo "📦 Pulling latest images..."
-            docker pull ${{ secrets.DOCKERHUB_USERNAME }}/llvm-obfuscator-backend:latest
-            docker pull ${{ secrets.DOCKERHUB_USERNAME }}/llvm-obfuscator-frontend:latest
+#             # Pull latest images
+#             echo "📦 Pulling latest images..."
+#             docker pull ${{ secrets.DOCKERHUB_USERNAME }}/llvm-obfuscator-backend:latest
+#             docker pull ${{ secrets.DOCKERHUB_USERNAME }}/llvm-obfuscator-frontend:latest
             
-            # Stop existing containers
-            echo "🛑 Stopping existing containers..."
-            docker-compose down || true
+#             # Stop existing containers
+#             echo "🛑 Stopping existing containers..."
+#             docker-compose down || true
             
-            # Start new containers
-            echo "🚀 Starting new containers..."
-            docker-compose up -d
+#             # Start new containers
+#             echo "🚀 Starting new containers..."
+#             docker-compose up -d
             
-            # Wait for services to be healthy
-            echo "⏳ Waiting for services to be healthy..."
-            sleep 30
+#             # Wait for services to be healthy
+#             echo "⏳ Waiting for services to be healthy..."
+#             sleep 30
             
-            # Check health
-            echo "🔍 Checking service health..."
-            if curl -fsS http://localhost:8000/api/health > /dev/null 2>&1; then
-              echo "✅ Backend is healthy"
-            else
-              echo "❌ Backend health check failed"
-              exit 1
-            fi
+#             # Check health
+#             echo "🔍 Checking service health..."
+#             if curl -fsS http://localhost:8000/api/health > /dev/null 2>&1; then
+#               echo "✅ Backend is healthy"
+#             else
+#               echo "❌ Backend health check failed"
+#               exit 1
+#             fi
             
-            if curl -fsS http://localhost/ > /dev/null 2>&1; then
-              echo "✅ Frontend is healthy"
-            else
-              echo "❌ Frontend health check failed"
-              exit 1
-            fi
+#             if curl -fsS http://localhost/ > /dev/null 2>&1; then
+#               echo "✅ Frontend is healthy"
+#             else
+#               echo "❌ Frontend health check failed"
+#               exit 1
+#             fi
             
-            # Clean up old images
-            echo "🧹 Cleaning up old images..."
-            docker image prune -f
+#             # Clean up old images
+#             echo "🧹 Cleaning up old images..."
+#             docker image prune -f
             
-            echo "🎉 Deployment completed successfully!"
-            echo "📊 Service Status:"
-            docker-compose ps
+#             echo "🎉 Deployment completed successfully!"
+#             echo "📊 Service Status:"
+#             docker-compose ps
             
-            echo "🌐 Application is available at:"
-            echo "   Frontend: http://${{ secrets.SSH_HOST }}"
-            echo "   Backend API: http://${{ secrets.SSH_HOST }}/api"
+#             echo "🌐 Application is available at:"
+#             echo "   Frontend: http://${{ secrets.SSH_HOST }}"
+#             echo "   Backend API: http://${{ secrets.SSH_HOST }}/api"
 
 

@@ -1,1 +1,0 @@
-/usr/bin/c++  -arch arm64 -Wl,-search_paths_first -Wl,-headerpad_max_install_names "CMakeFiles/symbol-obfuscate.dir/tools/symbol-obfuscate.cpp.o" -o symbol-obfuscate   -L/opt/homebrew/Cellar/jsoncpp/1.9.6/lib  -Wl,-rpath,/opt/homebrew/Cellar/jsoncpp/1.9.6/lib libSymbolObfuscatorCore.a /opt/homebrew/Cellar/openssl@3/3.5.0/lib/libcrypto.dylib -ljsoncpp
