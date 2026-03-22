@@ -606,6 +606,78 @@ def jotai(
     except Exception as exc:
         logger.error("Jotai benchmark failed: %s", exc)
         raise typer.Exit(code=1)
+    
+@app.command()
+def headers(
+    input_file: Path = typer.Argument(..., help="C/C++ source file to obfuscate"),
+    output: Optional[Path] = typer.Option(None, "--output", "-o", help="Output file (default: input_obfuscated.c)"),
+    stdlib_only: bool = typer.Option(False, "--stdlib-only", help="Obfuscate only standard library functions"),
+    custom_only: bool = typer.Option(False, "--custom-only", help="Obfuscate only custom functions"),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Show what would be obfuscated without writing output"),
+    verbose: bool = typer.Option(False, "--verbose", "-v", help="Show function pointer mapping"),
+):
+    """Obfuscate function calls in a C/C++ source file using indirect calls via function pointers."""
+
+    from core.indirect_call_obfuscator import obfuscate_indirect_calls
+
+    if not input_file.exists():
+        typer.echo(f"Error: Input file not found: {input_file}", err=True)
+        raise typer.Exit(code=1)
+    
+    output_file = output or input_file.parent / f"{input_file.stem}_obfuscated{input_file.suffix}"
+
+    if stdlib_only:
+        obfuscate_stdlib = True
+        obfuscate_custom = False
+    elif custom_only:
+        obfuscate_stdlib = False
+        obfuscate_custom = True
+    else:
+        obfuscate_stdlib = True
+        obfuscate_custom = True
+
+    typer.echo(f"📄 Reading: {input_file}")
+    source_code = input_file.read_text(encoding="utf-8", errors="replace")
+
+    typer.echo("🔒 Obfuscating function calls...")
+    typer.echo(f"   - Standard library: {'Yes' if obfuscate_stdlib else 'No'}")
+    typer.echo(f"   - Custom functions: {'Yes' if obfuscate_custom else 'No'}")
+
+    try:
+        transformed_code, metadata = obfuscate_indirect_calls(
+            source_code,
+            input_file,
+            obfuscate_stdlib=obfuscate_stdlib,
+            obfuscate_custom=obfuscate_custom,
+        )
+
+        typer.echo("\n✅ Obfuscation complete:")
+        typer.echo(f"   - Standard library functions: {metadata['obfuscated_stdlib_functions']}")
+        typer.echo(f"   - Custom functions: {metadata['obfuscated_custom_functions']}")
+        typer.echo(f"   - Total obfuscated: {metadata['total_obfuscated']}")
+
+        if verbose:
+            typer.echo("\n📋 Function pointers created:")
+            for func, ptr in sorted(metadata["function_pointers"].items()):
+                typer.echo(f"   {func} → {ptr}")
+
+        if dry_run:
+            typer.echo("\n Dry run mode - no file written")
+            typer.echo("\n Preview (first 50 lines):")
+            typer.echo("=" * 60)
+            for i, line in enumerate(transformed_code.split("\n")[:50], 1):
+                typer.echo(f"{i:3}: {line}")
+            typer.echo("=" * 60)
+        else:
+            output_file.write_text(transformed_code, encoding="utf-8")
+            typer.echo(f"\n💾 Output written to: {output_file}")
+
+    except Exception as exc:
+        typer.echo(f"\n❌ Error during obfuscation: {exc}", err=True)
+        if verbose:
+            import traceback
+            traceback.print_exc()
+        raise typer.Exit(code=1)
 
 
 if __name__ == "__main__":
